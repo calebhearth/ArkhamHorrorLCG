@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Arkham.Types.Asset
-  ( lookupAsset, Asset )
+  ( lookupAsset, allAssets, isDamageable, Asset )
 where
 
 import           Arkham.Types.AssetId
@@ -12,7 +12,7 @@ import           Arkham.Types.Message
 import           Arkham.Types.Trait
 import           ClassyPrelude
 import           Data.Aeson
--- import           Data.Coerce
+import           Data.Coerce
 import qualified Data.HashMap.Strict         as HashMap
 import qualified Data.HashSet                as HashSet
 import           Lens.Micro
@@ -26,6 +26,9 @@ allAssets = HashMap.fromList
   [ ("01020", machete)
   , ("01021", guardDog)
   ]
+
+instance HasCardCode Asset where
+  getCardCode = assetCardCode . assetAttrs
 
 data Slot = HandSlot
     | AllySlot
@@ -55,15 +58,21 @@ data Attrs = Attrs
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
+defeated :: Attrs -> Bool
+defeated Attrs {..} = maybe False (assetHealthDamage >=) assetHealth || maybe False (assetSanityDamage >=) assetSanity
+
 data Asset = Machete MacheteI
     | GuardDog GuardDogI
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
--- assetAttrs :: Asset -> Attrs
--- assetAttrs = \case
---   GuardDog attrs -> coerce attrs
---   Machete attrs -> coerce attrs
+assetAttrs :: Asset -> Attrs
+assetAttrs = \case
+  GuardDog attrs -> coerce attrs
+  Machete attrs -> coerce attrs
+
+isDamageable :: Asset -> Bool
+isDamageable a = (isJust . assetHealth . assetAttrs $ a) || (isJust . assetHealth .assetAttrs $ a)
 
 baseAttrs :: AssetId -> CardCode -> Int -> Text -> HashSet Trait -> Attrs
 baseAttrs eid cardCode cost name traits = Attrs
@@ -80,6 +89,15 @@ baseAttrs eid cardCode cost name traits = Attrs
   , assetSanityDamage = 0
   , assetTraits = traits
   }
+
+owner :: Lens' Attrs AssetOwner
+owner = lens assetOwner $ \m x -> m { assetOwner = x }
+
+healthDamage :: Lens' Attrs Int
+healthDamage = lens assetHealthDamage $ \m x -> m { assetHealthDamage = x }
+
+sanityDamage :: Lens' Attrs Int
+sanityDamage = lens assetSanityDamage $ \m x -> m { assetSanityDamage = x }
 
 newtype MacheteI = MacheteI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
@@ -103,19 +121,29 @@ instance (HasQueue env) => RunMessage env Asset where
 instance (HasQueue env) => RunMessage env GuardDogI where
   runMessage msg (GuardDogI attrs@Attrs{..}) = case msg of
     AssetDamage aid eid _ _ | aid == assetId -> do
+      -- we must unshift the asset destroyed first before unshifting the question
+      -- this is necessary to keep the asset as a valid investigator source of damage
+      -- for any additional effects, such as triggering Roland's ability.
+      result <- runMessage msg attrs
       unshiftMessage
         (Ask $ ChooseTo
-          (EnemyDamaged
+          (EnemyDamage
             eid
             (AssetSource aid)
             1
           )
         )
-      GuardDogI <$> runMessage msg attrs
+      pure $ GuardDogI result
     _ -> GuardDogI <$> runMessage msg attrs
 
 instance (HasQueue env) => RunMessage env MacheteI where
   runMessage msg (MacheteI attrs) = MacheteI <$> runMessage msg attrs
 
 instance (HasQueue env) => RunMessage env Attrs where
-  runMessage _ = pure
+  runMessage msg a@Attrs {..} = case msg of
+    AssetDamage aid _ health sanity | aid == assetId -> do
+      let a' = a & healthDamage +~ health & sanityDamage +~ sanity
+      when (defeated a') (unshiftMessage (AssetDefeated aid))
+      pure a'
+    InvestigatorPlayAsset iid aid | aid == assetId -> pure $ a & owner .~ Investigator iid
+    _ -> pure a

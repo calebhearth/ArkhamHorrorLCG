@@ -2,6 +2,7 @@ module Arkham.Types.Message
   ( Message(..)
   , Question(..)
   , Source(..)
+  , ClueCount(..)
   )
 where
 
@@ -10,12 +11,16 @@ import           Arkham.Types.Card
 import           Arkham.Types.EnemyId
 import           Arkham.Types.InvestigatorId
 import           Arkham.Types.LocationId
+import           Arkham.Types.Token
 import           ClassyPrelude
 import           Data.Aeson
 
-newtype Source = AssetSource AssetId
-  deriving stock (Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
+newtype ClueCount = ClueCount { unClueCount :: Int }
+
+data Source = AssetSource AssetId
+    | InvestigatorSource InvestigatorId
+    deriving stock (Show, Generic)
+    deriving anyclass (ToJSON, FromJSON)
 
 data Message = Setup
     | BeginInvestigation
@@ -28,7 +33,9 @@ data Message = Setup
     | ChooseTakeResourceAction InvestigatorId
     | ChooseDrawCardAction InvestigatorId
     | ChoosePlayCardAction InvestigatorId
-    | ChooseActiveCardAbilityAction InvestigatorId
+    | ChooseActivateCardAbilityAction InvestigatorId
+    | ActivateCardAbilityAction InvestigatorId CardCode Int
+    | ResolveToken Token InvestigatorId Int Int Message
     | ChooseMoveAction InvestigatorId
     | ChooseInvestigateAction InvestigatorId
     | ChooseFightEnemyAction InvestigatorId
@@ -44,11 +51,17 @@ data Message = Setup
     | InvestigatorDrawEnemy InvestigatorId LocationId EnemyId
     | EnemySpawn LocationId EnemyId
     | EnemyEngageInvestigator EnemyId InvestigatorId
-    | EnemyDamaged EnemyId Source Int
+    | EnemyDamage EnemyId Source Int
+    | EnemyDefeated EnemyId Source
     | InvestigatorPlayCard InvestigatorId CardCode
     | InvestigatorAssignDamage InvestigatorId EnemyId Int Int
     | AssetDamage AssetId EnemyId Int Int
+    | AssetDefeated AssetId
+    | AssetDiscarded AssetId CardCode
     | InvestigatorDamage InvestigatorId EnemyId Int Int
+    | InvestigatorPlayAsset InvestigatorId AssetId
+    | DiscoverClueAtLocation InvestigatorId LocationId
+    | DiscoverClue InvestigatorId
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 

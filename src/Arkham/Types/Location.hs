@@ -13,7 +13,6 @@ import           Data.Coerce
 import qualified Data.HashMap.Strict         as HashMap
 import qualified Data.HashSet                as HashSet
 import           Lens.Micro
-import           Lens.Micro.Extras
 import           Safe                        (fromJustNote)
 
 lookupLocation :: LocationId -> Location
@@ -22,7 +21,7 @@ lookupLocation lid = fromJustNote ("Unkown location: " <> show lid) $ HashMap.lo
 allLocations :: HashMap LocationId Location
 allLocations = HashMap.fromList $ map (\s -> (locationId . locationAttrs $ s, s)) [study, hallway]
 
-data ClueCount = Static Int
+data GameValue = Static Int
     | PerPlayer Int
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -30,7 +29,7 @@ data ClueCount = Static Int
 data Attrs = Attrs
     { locationName          :: Text
     , locationId            :: LocationId
-    , locationRevealClues   :: ClueCount
+    , locationRevealClues   :: GameValue
     , locationClues         :: Int
     , locationShroud        :: Int
     , locationRevealed      :: Bool
@@ -40,10 +39,13 @@ data Attrs = Attrs
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
+instance HasClueCount Location where
+  getClueCount = ClueCount . locationClues . locationAttrs
+
 investigators :: Lens' Attrs (HashSet InvestigatorId)
 investigators = lens locationInvestigators $ \m x -> m { locationInvestigators = x }
 
-baseAttrs :: LocationId -> Text -> Int -> ClueCount -> Attrs
+baseAttrs :: LocationId -> Text -> Int -> GameValue -> Attrs
 baseAttrs lid name shroud revealClues = Attrs
   { locationName = name
   , locationId = lid
@@ -58,9 +60,9 @@ baseAttrs lid name shroud revealClues = Attrs
 clues :: Lens' Attrs Int
 clues = lens locationClues $ \m x -> m { locationClues = x }
 
-fromClueCount :: ClueCount -> Int -> Int
-fromClueCount (Static n) _     = n
-fromClueCount (PerPlayer n) pc = n * pc
+fromGameValue :: GameValue -> Int -> Int
+fromGameValue (Static n) _     = n
+fromGameValue (PerPlayer n) pc = n * pc
 
 revealed :: Lens' Attrs Bool
 revealed = lens locationRevealed $ \m x -> m { locationRevealed = x }
@@ -90,23 +92,31 @@ newtype HallwayI = HallwayI Attrs
 hallway :: Location
 hallway = Hallway $ HallwayI $ baseAttrs "01112" "Hallway" 1 (Static 0)
 
-instance (HasMap InvestigatorId env, HasQueue env) => RunMessage env Location where
+instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env Location where
   runMessage msg = \case
     Study x -> Study <$> runMessage msg x
     Hallway x -> Hallway <$> runMessage msg x
 
-instance (HasMap InvestigatorId env, HasQueue env) => RunMessage env StudyI where
+instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env StudyI where
   runMessage msg (StudyI attrs)  = StudyI <$> runMessage msg attrs
 
-instance (HasMap InvestigatorId env, HasQueue env) => RunMessage env HallwayI where
+instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env HallwayI where
   runMessage msg (HallwayI attrs) = HallwayI <$> runMessage msg attrs
 
-instance (HasMap InvestigatorId env, HasQueue env) => RunMessage env Attrs where
+instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
+    DiscoverClueAtLocation iid lid | lid == locationId ->
+      if locationClues > 0
+        then do
+          unshiftMessage (DiscoverClue iid)
+          pure $ a & clues -~ 1
+        else pure a
     MoveTo iid lid | lid == locationId -> pure $ a & investigators %~ HashSet.insert iid
     EnemySpawn lid eid | lid == locationId ->
       pure $ a & enemies %~ HashSet.insert eid
+    EnemyDefeated eid _ ->
+      pure $ a & enemies %~ HashSet.delete eid
     RevealLocation lid | lid == locationId -> do
-      clueCount <- fromClueCount locationRevealClues <$> asks (HashMap.size . view (getMap @InvestigatorId))
+      clueCount <- fromGameValue locationRevealClues <$> asks (HashSet.size . getSet @InvestigatorId)
       pure $ a & clues .~ clueCount & revealed .~ True
     _ -> pure a

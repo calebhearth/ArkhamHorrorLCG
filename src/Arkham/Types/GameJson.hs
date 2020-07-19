@@ -2,6 +2,7 @@ module Arkham.Types.GameJson where
 
 import           Arkham.Types.Asset
 import           Arkham.Types.AssetId
+import           Arkham.Types.Card
 import           Arkham.Types.Enemy
 import           Arkham.Types.EnemyId
 import           Arkham.Types.Investigator
@@ -23,6 +24,7 @@ data GameJson = GameJson
     , gAssets               :: HashMap AssetId Asset
     , gActiveInvestigatorId :: InvestigatorId
     , gPhase                :: Phase
+    , gDiscard              :: [CardCode]
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)

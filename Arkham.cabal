@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 43b89114835ceecdf144ea36d0650e5fad434d9792903ed7363f45f43b950e13
+-- hash: 9ad1496422265c21483dfa0eb7725c7561fb090ba9d32eb671eead78d155d4ac
 
 name:           Arkham
 version:        0.1.0.0
@@ -43,6 +43,7 @@ library
       Arkham.Types.Phase
       Arkham.Types.Scenario
       Arkham.Types.ScenarioId
+      Arkham.Types.Token
       Arkham.Types.Trait
   other-modules:
       Paths_Arkham

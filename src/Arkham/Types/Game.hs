@@ -28,8 +28,10 @@ import           Arkham.Types.Scenario
 import           Arkham.Types.ScenarioId
 import           ClassyPrelude
 import qualified Data.HashMap.Strict         as HashMap
+import qualified Data.HashSet                as HashSet
 import           Data.UUID.V4
 import           Lens.Micro
+import           Lens.Micro.Extras
 import           Lens.Micro.Platform         ()
 import           Safe                        (fromJustNote)
 import           Text.Pretty.Simple
@@ -44,19 +46,23 @@ data Game = Game
     , giAssets               :: HashMap AssetId Asset
     , giActiveInvestigatorId :: InvestigatorId
     , giPhase                :: Phase
+    , giDiscard              :: [CardCode]
     }
 
 locations :: Lens' Game (HashMap LocationId Location)
-locations = getMap
+locations = lens giLocations $ \m x -> m { giLocations = x }
 
 investigators :: Lens' Game (HashMap InvestigatorId Investigator)
-investigators = getMap
+investigators = lens giInvestigators $ \m x -> m { giInvestigators = x }
 
 enemies :: Lens' Game (HashMap EnemyId Enemy)
-enemies = getMap
+enemies = lens giEnemies $ \m x -> m { giEnemies = x }
 
 assets :: Lens' Game (HashMap AssetId Asset)
-assets = getMap
+assets = lens giAssets $ \m x -> m { giAssets = x }
+
+discard :: Lens' Game [CardCode]
+discard = lens giDiscard $ \m x -> m { giDiscard = x }
 
 activeInvestigatorId :: Lens' Game InvestigatorId
 activeInvestigatorId =
@@ -81,6 +87,7 @@ newGame scenarioId investigatorsList = do
               , giInvestigators        = investigatorsMap
               , giActiveInvestigatorId = initialInvestigatorId
               , giPhase                = Investigation
+              , giDiscard = mempty
               }
  where
   initialInvestigatorId =
@@ -88,21 +95,23 @@ newGame scenarioId investigatorsList = do
   investigatorsMap =
     HashMap.fromList $ map (\i -> (getInvestigatorId i, i)) investigatorsList
 
-instance HasMap EnemyId Game where
-  type Elem EnemyId = Enemy
-  getMap = lens giEnemies $ \m x -> m { giEnemies = x }
+instance HasCount ClueCount LocationId Game where
+  getCount lid g = fromJustNote "No location" $ getClueCount <$> g ^? locations . ix lid
 
-instance HasMap AssetId Game where
-  type Elem AssetId = Asset
-  getMap = lens giAssets $ \m x -> m { giAssets = x }
+instance HasSet EnemyId Game where
+  getSet = HashMap.keysSet . view enemies
 
-instance HasMap LocationId Game where
-  type Elem LocationId = Location
-  getMap = lens giLocations $ \m x -> m { giLocations = x }
+instance HasSet AssetId Game where
+  getSet = HashMap.keysSet . view assets
 
-instance HasMap InvestigatorId Game where
-  type Elem InvestigatorId = Investigator
-  getMap = lens giInvestigators $ \m x -> m { giInvestigators = x }
+instance HasSet DamageableAssetId Game where
+  getSet = HashSet.map DamageableAssetId . HashMap.keysSet . HashMap.filter isDamageable . view assets
+
+instance HasSet LocationId Game where
+  getSet = HashMap.keysSet . view locations
+
+instance HasSet InvestigatorId Game where
+  getSet = HashMap.keysSet . view investigators
 
 instance HasQueue Game where
   messageQueue = lens giMessages $ \m x -> m { giMessages = x }
@@ -120,6 +129,12 @@ locationFor iid g = locationOf investigator
 runGameMessage :: (HasQueue env, MonadReader env m, MonadIO m) => Message -> Game -> m Game
 runGameMessage msg g = case msg of
   PlaceLocation lid -> pure $ g & locations . at lid ?~ lookupLocation lid
+  InvestigatorPlayCard iid cardCode -> do
+    mGame <- for (HashMap.lookup cardCode allAssets) $ \builder -> do
+                  aid <- liftIO $ AssetId <$> nextRandom
+                  unshiftMessage (InvestigatorPlayAsset iid aid)
+                  pure $ g & assets %~ HashMap.insert aid (builder aid)
+    pure . fromJustNote "something went very wrong" $ mGame
   EnemyWillAttack iid eid -> do
     mNextMessage <- peekMessage
     case mNextMessage of
@@ -151,6 +166,17 @@ runGameMessage msg g = case msg of
         unshiftMessage (EnemyAttacks (EnemyAttack iid2 eid2 : as))
       _ -> unshiftMessage (Ask . ChooseOneAtATime $ map ChoiceResult as)
     pure g
+  AssetDefeated aid -> do
+    let asset = g ^?! assets . ix aid
+    unshiftMessage (AssetDiscarded aid (getCardCode asset))
+    pure $ g & assets %~ HashMap.delete aid
+  EnemyDefeated eid _ ->
+    let enemy = g ^?! enemies . ix eid
+    in
+      pure
+      $ g
+      & (enemies %~ HashMap.delete eid)
+      & (discard %~ (getCardCode enemy :))
   BeginInvestigation -> do
     let
       iid = fromJustNote "No investigators?" . headMay $ HashMap.keys (g ^. investigators)
@@ -188,6 +214,7 @@ toExternalGame Game {..} = do
                   , gAssets = giAssets
                   , gActiveInvestigatorId = giActiveInvestigatorId
                   , gPhase         = giPhase
+                  , gDiscard         = giDiscard
                   }
 
 toInternalGame' :: IORef [Message] -> GameJson -> Game
@@ -200,6 +227,7 @@ toInternalGame' ref GameJson {..} = do
        , giAssets = gAssets
        , giActiveInvestigatorId = gActiveInvestigatorId
        , giPhase         = gPhase
+       , giDiscard         = gDiscard
        }
 
 runMessages :: MonadIO m => Game -> m (Maybe Question, GameJson)
