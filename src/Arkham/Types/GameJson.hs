@@ -1,5 +1,7 @@
 module Arkham.Types.GameJson where
 
+import           Arkham.Types.Asset
+import           Arkham.Types.AssetId
 import           Arkham.Types.Enemy
 import           Arkham.Types.EnemyId
 import           Arkham.Types.Investigator
@@ -18,6 +20,7 @@ data GameJson = GameJson
     , gLocations            :: HashMap LocationId Location
     , gInvestigators        :: HashMap InvestigatorId Investigator
     , gEnemies              :: HashMap EnemyId Enemy
+    , gAssets               :: HashMap AssetId Asset
     , gActiveInvestigatorId :: InvestigatorId
     , gPhase                :: Phase
     }

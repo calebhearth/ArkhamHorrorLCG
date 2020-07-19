@@ -11,6 +11,8 @@ module Arkham.Types.Game
   )
 where
 
+import           Arkham.Types.Asset
+import           Arkham.Types.AssetId
 import           Arkham.Types.Card
 import           Arkham.Types.Classes
 import           Arkham.Types.Enemy
@@ -39,6 +41,7 @@ data Game = Game
     , giLocations            :: HashMap LocationId Location
     , giInvestigators        :: HashMap InvestigatorId Investigator
     , giEnemies              :: HashMap EnemyId Enemy
+    , giAssets               :: HashMap AssetId Asset
     , giActiveInvestigatorId :: InvestigatorId
     , giPhase                :: Phase
     }
@@ -51,6 +54,9 @@ investigators = getMap
 
 enemies :: Lens' Game (HashMap EnemyId Enemy)
 enemies = getMap
+
+assets :: Lens' Game (HashMap AssetId Asset)
+assets = getMap
 
 activeInvestigatorId :: Lens' Game InvestigatorId
 activeInvestigatorId =
@@ -71,6 +77,7 @@ newGame scenarioId investigatorsList = do
               , giScenario             = lookupScenario scenarioId
               , giLocations            = mempty
               , giEnemies            = mempty
+              , giAssets            = mempty
               , giInvestigators        = investigatorsMap
               , giActiveInvestigatorId = initialInvestigatorId
               , giPhase                = Investigation
@@ -84,6 +91,10 @@ newGame scenarioId investigatorsList = do
 instance HasMap EnemyId Game where
   type Elem EnemyId = Enemy
   getMap = lens giEnemies $ \m x -> m { giEnemies = x }
+
+instance HasMap AssetId Game where
+  type Elem AssetId = Asset
+  getMap = lens giAssets $ \m x -> m { giAssets = x }
 
 instance HasMap LocationId Game where
   type Elem LocationId = Location
@@ -162,6 +173,7 @@ instance RunMessage Game Game where
     traverseOf scenario (runMessage msg) g
       >>= traverseOf (locations . traverse)     (runMessage msg)
       >>= traverseOf (enemies . traverse) (runMessage msg)
+      >>= traverseOf (assets . traverse) (runMessage msg)
       >>= traverseOf (investigators . traverse) (runMessage msg)
       >>= runGameMessage msg
 
@@ -173,6 +185,7 @@ toExternalGame Game {..} = do
                   , gLocations     = giLocations
                   , gInvestigators = giInvestigators
                   , gEnemies = giEnemies
+                  , gAssets = giAssets
                   , gActiveInvestigatorId = giActiveInvestigatorId
                   , gPhase         = giPhase
                   }
@@ -184,6 +197,7 @@ toInternalGame' ref GameJson {..} = do
        , giLocations     = gLocations
        , giInvestigators = gInvestigators
        , giEnemies = gEnemies
+       , giAssets = gAssets
        , giActiveInvestigatorId = gActiveInvestigatorId
        , giPhase         = gPhase
        }
@@ -233,6 +247,11 @@ extract n xs =
 handleQuestion :: MonadIO m => GameJson -> Question -> m [Message]
 handleQuestion _ = \case
   ChoiceResult msg -> pure [msg]
+  q@(ChooseTo msg) -> do
+    putStr $ pack $ show q
+    liftIO $ hFlush stdout
+    resp <- getLine
+    if "n" `isPrefixOf` toLower resp then pure [] else pure [msg]
   ChooseOne [] -> pure []
   ChooseOne qs -> do
     i <- keepAsking @Int ("Choose one:\n\n" <> (unlines $ map show $ zip @_ @Int [1..] qs))

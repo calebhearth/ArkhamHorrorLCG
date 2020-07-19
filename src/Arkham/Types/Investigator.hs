@@ -1,5 +1,8 @@
+{-# LANGUAGE UndecidableInstances #-}
 module Arkham.Types.Investigator (hasEndedTurn, lookupInvestigator, GetInvestigatorId(..), Investigator) where
 
+import           Arkham.Types.AssetId
+import           Arkham.Types.Card
 import           Arkham.Types.Classes
 import           Arkham.Types.EnemyId
 import           Arkham.Types.InvestigatorId
@@ -37,6 +40,9 @@ data Attrs = Attrs
     , investigatorActionsRemaining :: Int
     , investigatorEndedTurn        :: Bool
     , investigatorEngagedEnemies   :: HashSet EnemyId
+    , investigatorDeck             :: [CardCode]
+    , investigatorDiscard          :: [CardCode]
+    , investigatorHand             :: [CardCode]
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -96,6 +102,9 @@ baseAttrs iid name health sanity willpower intellect combat agility = Attrs
   , investigatorActionsRemaining = 3
   , investigatorEndedTurn = False
   , investigatorEngagedEnemies = mempty
+  , investigatorDeck = mempty
+  , investigatorDiscard = mempty
+  , investigatorHand = mempty
   }
 
 newtype RolandBanksI = RolandBanksI Attrs
@@ -113,34 +122,31 @@ newtype DaisyWalkerI = DaisyWalkerI Attrs
 daisyWalker :: Investigator
 daisyWalker = DaisyWalker $ DaisyWalkerI $ baseAttrs "01002" "Daisy Walker" 5 9 3 5 2 2
 
-instance (HasQueue env) => RunMessage env Investigator where
+instance (HasMap AssetId env, HasQueue env) => RunMessage env Investigator where
   runMessage msg = \case
     RolandBanks x -> RolandBanks <$> runMessage msg x
     DaisyWalker x -> DaisyWalker <$> runMessage msg x
 
-instance (HasQueue env) => RunMessage env RolandBanksI where
+instance (HasMap AssetId env, HasQueue env) => RunMessage env RolandBanksI where
   runMessage msg (RolandBanksI attrs) = RolandBanksI <$> runMessage msg attrs
 
-instance (HasQueue env) => RunMessage env DaisyWalkerI where
+instance (HasMap AssetId env, HasQueue env) => RunMessage env DaisyWalkerI where
   runMessage msg (DaisyWalkerI attrs) = DaisyWalkerI <$> runMessage msg attrs
 
-instance (HasQueue env) => RunMessage env Attrs where
+instance (HasMap AssetId env, HasQueue env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
     EnemySpawn lid eid | lid == investigatorLocation ->
       a <$ unshiftMessage (EnemyEngageInvestigator eid investigatorId)
     EnemyEngageInvestigator eid iid | iid == investigatorId -> pure $ a & engagedEnemies %~ HashSet.insert eid
-    InvestigatorAssignDamage iid _ health sanity | iid == investigatorId -> pure $ a & healthDamage +~ health & sanityDamage +~ sanity
-      -- let
-      --   damagableAssets =
-      --     map (\a -> ChoiceResult $ AssetDamaged (_assetId a) eid amount)
-      --       $ filter (isJust . _assetHealth)
-      --       $ map toAsset _investigatorAssets
-      -- i <$ unshiftMessage
-      --   (Ask $ ChooseOne
-      --     (ChoiceResult (InvestigatorDamage investigatorId' eid amount)
-      --     : damagableAssets
-      --     )
-      --   )
+    InvestigatorAssignDamage iid eid health sanity | iid == investigatorId -> do
+      allAssets <- asks (view (getMap @AssetId))
+      let damagableAssets = map (\k -> ChoiceResult $ AssetDamage k eid health sanity) $ HashMap.keys $ HashMap.filter isDamageable allAssets
+      a <$ unshiftMessage
+        (Ask $ ChooseOne
+          (ChoiceResult (InvestigatorDamage investigatorId eid health sanity)
+          : damagableAssets
+          )
+        )
     MoveAllTo lid -> a <$ unshiftMessage (MoveTo investigatorId lid)
     MoveTo iid lid | iid == investigatorId -> pure $ a  & locationId .~ lid
     ChooseEndTurn iid | iid == investigatorId -> pure $ a & endedTurn .~ True

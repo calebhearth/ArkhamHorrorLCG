@@ -48,3 +48,6 @@ class HasMap key a where
 
 class HasLocation a where
   locationOf :: a -> LocationId
+
+class IsAsset a where
+  isDamageable :: a -> Bool

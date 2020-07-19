@@ -47,6 +47,7 @@ default-extensions:
 - OverloadedStrings
 - TypeApplications
 - TupleSections
+- FlexibleContexts
 
 library:
   source-dirs: src

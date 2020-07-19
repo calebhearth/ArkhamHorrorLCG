@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7128e757ba2e05ffe7d3e0394cfa0099a759384ad1508f30cc38f6128326aeff
+-- hash: 43b89114835ceecdf144ea36d0650e5fad434d9792903ed7363f45f43b950e13
 
 name:           Arkham
 version:        0.1.0.0
@@ -27,6 +27,8 @@ source-repository head
 
 library
   exposed-modules:
+      Arkham.Types.Asset
+      Arkham.Types.AssetId
       Arkham.Types.Card
       Arkham.Types.Classes
       Arkham.Types.Enemy
@@ -41,11 +43,12 @@ library
       Arkham.Types.Phase
       Arkham.Types.Scenario
       Arkham.Types.ScenarioId
+      Arkham.Types.Trait
   other-modules:
       Paths_Arkham
   hs-source-dirs:
       src
-  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections
+  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts
   build-depends:
       aeson
     , aeson-pretty
@@ -68,7 +71,7 @@ executable Arkham-exe
       Paths_Arkham
   hs-source-dirs:
       app
-  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections
+  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Arkham
@@ -94,7 +97,7 @@ test-suite Arkham-test
       Paths_Arkham
   hs-source-dirs:
       test
-  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections
+  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Arkham
