@@ -8,6 +8,7 @@ import           Arkham.Types.EnemyId
 import           Arkham.Types.InvestigatorId
 import           Arkham.Types.LocationId
 import           Arkham.Types.Message
+import           Arkham.Types.SkillType
 import           Arkham.Types.Token
 import           ClassyPrelude
 import           Data.Aeson
@@ -41,7 +42,7 @@ data Attrs = Attrs
     , investigatorClues            :: Int
     , investigatorResources        :: Int
     , investigatorLocation         :: LocationId
-    , investigatorActionsRemaining :: Int
+    , investigatorRemainingActions :: Int
     , investigatorEndedTurn        :: Bool
     , investigatorEngagedEnemies   :: HashSet EnemyId
     , investigatorAssets           :: HashSet AssetId
@@ -72,6 +73,9 @@ resources = lens investigatorResources $ \m x -> m { investigatorResources = x }
 
 clues :: Lens' Attrs Int
 clues = lens investigatorClues $ \m x -> m { investigatorClues = x }
+
+remainingActions :: Lens' Attrs Int
+remainingActions = lens investigatorRemainingActions $ \m x -> m { investigatorRemainingActions = x }
 
 engagedEnemies :: Lens' Attrs (HashSet EnemyId)
 engagedEnemies = lens investigatorEngagedEnemies $ \m x -> m { investigatorEngagedEnemies = x }
@@ -113,7 +117,7 @@ baseAttrs iid name health sanity willpower intellect combat agility = Attrs
   , investigatorClues = 0
   , investigatorResources = 5
   , investigatorLocation = "00000"
-  , investigatorActionsRemaining = 3
+  , investigatorRemainingActions = 3
   , investigatorEndedTurn = False
   , investigatorEngagedEnemies = mempty
   , investigatorAssets = mempty
@@ -172,7 +176,7 @@ instance (HasCount ClueCount LocationId env, HasSet DamageableAssetId env, HasQu
         1 -> rb <$ unshiftMessage (DiscoverClueAtLocation investigatorId investigatorLocation)
         _ -> pure rb
     ResolveToken ElderSign _ difficulty skillValue onSuccess -> do
-      clueCount <- unClueCount <$> asks (getCount @ClueCount investigatorLocation)
+      clueCount <- unClueCount <$> asks (getCount investigatorLocation)
       rb <$ runCheck (skillValue + clueCount) difficulty onSuccess
     _ -> RolandBanksI <$> runMessage msg attrs
 
@@ -188,13 +192,16 @@ instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env Attrs wh
     AssetDiscarded aid cardCode | aid `elem` investigatorAssets ->
       pure $ a & assets %~ HashSet.delete aid & discard %~ (cardCode:)
     InvestigatorAssignDamage iid eid health sanity | iid == investigatorId -> do
-      allDamageableAssets <- HashSet.toList . HashSet.intersection investigatorAssets . HashSet.map unDamageableAssetId <$> asks (getSet @DamageableAssetId)
+      allDamageableAssets <- HashSet.toList . HashSet.intersection investigatorAssets . HashSet.map unDamageableAssetId <$> asks getSet
       a <$ unshiftMessage
         (Ask $ ChooseOne
           (ChoiceResult (InvestigatorDamage investigatorId eid health sanity)
           : map (\k -> ChoiceResult $ AssetDamage k eid health sanity) allDamageableAssets
           )
         )
+
+    ChooseInvestigateAction iid | iid == investigatorId ->
+      a <$ traverse_ unshiftMessage (reverse [CheckAttackOfOpportunity iid, Investigate SkillIntellect investigatorIntellect iid investigatorLocation])
     DiscoverClue iid | iid == investigatorId -> pure $ a & clues +~ 1
     InvestigatorPlayAsset iid aid | iid == investigatorId -> pure $ a & assets %~ HashSet.insert aid
     InvestigatorDamage iid _ health sanity
@@ -202,22 +209,26 @@ instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env Attrs wh
     MoveAllTo lid -> a <$ unshiftMessage (MoveTo investigatorId lid)
     MoveTo iid lid | iid == investigatorId -> pure $ a  & locationId .~ lid
     ChooseEndTurn iid | iid == investigatorId -> pure $ a & endedTurn .~ True
-    ChooseTakeResourceAction iid | iid == investigatorId ->
-      a <$ traverse unshiftMessage (reverse [CheckAttackOfOpportunity iid, TakeResources iid 1])
+    ChooseTakeResourceAction iid | iid == investigatorId -> do
+      traverse_ unshiftMessage (reverse [CheckAttackOfOpportunity iid, TakeResources iid 1])
+      pure $ a & remainingActions -~ 1
     TakeResources iid n | iid == investigatorId -> pure $ a & resources +~ n
-    PlayerWindow iid | iid == investigatorId -> a <$ unshiftMessage
-      ( Ask
-      $ ChooseOne
-        [ ChoiceResult $ ChooseTakeResourceAction iid
-        , ChoiceResult $ ChooseDrawCardAction iid
-        , ChoiceResult $ ChoosePlayCardAction iid
-        , ChoiceResult $ ChooseActivateCardAbilityAction iid
-        , ChoiceResult $ ChooseMoveAction iid
-        , ChoiceResult $ ChooseInvestigateAction iid
-        , ChoiceResult $ ChooseFightEnemyAction iid
-        , ChoiceResult $ ChooseEngageEnemyAction iid
-        , ChoiceResult $ ChooseEvadeEnemyAction iid
-        , ChoiceResult $ ChooseEndTurn iid
-        ]
-      )
+    PlayerWindow iid | iid == investigatorId ->
+      if a ^. remainingActions > 0
+         then a <$ unshiftMessage
+           ( Ask
+           $ ChooseOne
+             [ ChoiceResult $ ChooseTakeResourceAction iid
+             , ChoiceResult $ ChooseDrawCardAction iid
+             , ChoiceResult $ ChoosePlayCardAction iid
+             , ChoiceResult $ ChooseActivateCardAbilityAction iid
+             , ChoiceResult $ ChooseMoveAction iid
+             , ChoiceResult $ ChooseInvestigateAction iid
+             , ChoiceResult $ ChooseFightEnemyAction iid
+             , ChoiceResult $ ChooseEngageEnemyAction iid
+             , ChoiceResult $ ChooseEvadeEnemyAction iid
+             , ChoiceResult $ ChooseEndTurn iid
+             ]
+           )
+        else a <$ unshiftMessage (Ask $ ChooseOne [ChoiceResult $ ChooseEndTurn iid])
     _ -> pure a

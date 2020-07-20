@@ -33,6 +33,7 @@ dependencies:
 - aeson-pretty
 - pretty-simple
 - uuid
+- random
 
 default-extensions:
 - NoImplicitPrelude

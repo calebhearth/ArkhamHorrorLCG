@@ -103,23 +103,23 @@ newtype GhoulMinionI = GhoulMinionI Attrs
 ghoulMinion :: EnemyId -> Enemy
 ghoulMinion uuid = GhoulMinion $ GhoulMinionI $ (baseAttrs uuid "01160" "Ghoul Minion") { enemyHealthDamage = 1, enemySanityDamage = 1 }
 
-instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env Enemy where
+instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env Enemy where
   runMessage msg = \case
     SwarmOfRats x -> SwarmOfRats <$> runMessage msg x
     GhoulMinion x -> GhoulMinion <$> runMessage msg x
 
-instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env SwarmOfRatsI where
+instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env SwarmOfRatsI where
   runMessage msg (SwarmOfRatsI attrs) = SwarmOfRatsI <$> runMessage msg attrs
 
-instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env GhoulMinionI where
+instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env GhoulMinionI where
   runMessage msg (GhoulMinionI attrs) = GhoulMinionI <$> runMessage msg attrs
 
-instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env Attrs where
+instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
     EnemyAttack iid eid | eid == enemyId ->
       a <$ unshiftMessage (InvestigatorAssignDamage iid enemyId enemyHealthDamage enemySanityDamage)
     EnemyDamage eid source amount | eid == enemyId -> do
-      playerCount <- HashSet.size <$> asks (getSet @InvestigatorId)
+      playerCount <- unPlayerCount <$> asks (getCount ())
       (a & damage +~ amount) <$ when
         (a ^. damage + amount >= a ^. health . to (gameValue playerCount))
         (unshiftMessage (EnemyDefeated eid source))

@@ -26,6 +26,7 @@ import           Arkham.Types.Message
 import           Arkham.Types.Phase
 import           Arkham.Types.Scenario
 import           Arkham.Types.ScenarioId
+import           Arkham.Types.Token
 import           ClassyPrelude
 import qualified Data.HashMap.Strict         as HashMap
 import qualified Data.HashSet                as HashSet
@@ -34,6 +35,7 @@ import           Lens.Micro
 import           Lens.Micro.Extras
 import           Lens.Micro.Platform         ()
 import           Safe                        (fromJustNote)
+import           System.Random
 import           Text.Pretty.Simple
 import           Text.Read
 
@@ -45,8 +47,10 @@ data Game = Game
     , giEnemies              :: HashMap EnemyId Enemy
     , giAssets               :: HashMap AssetId Asset
     , giActiveInvestigatorId :: InvestigatorId
+    , giLeadInvestigatorId   :: InvestigatorId
     , giPhase                :: Phase
     , giDiscard              :: [CardCode]
+    , giTokenBag             :: [Token]
     }
 
 locations :: Lens' Game (HashMap LocationId Location)
@@ -86,8 +90,27 @@ newGame scenarioId investigatorsList = do
               , giAssets            = mempty
               , giInvestigators        = investigatorsMap
               , giActiveInvestigatorId = initialInvestigatorId
+              , giLeadInvestigatorId = initialInvestigatorId
               , giPhase                = Investigation
               , giDiscard = mempty
+              , giTokenBag =
+                [ PlusOne
+                , PlusOne
+                , Zero
+                , Zero
+                , Zero
+                , MinusOne
+                , MinusOne
+                , MinusOne
+                , MinusTwo
+                , MinusTwo
+                , Skull
+                , Skull
+                , Cultist
+                , Tablet
+                , AutoFail
+                , ElderSign
+                ]
               }
  where
   initialInvestigatorId =
@@ -98,20 +121,11 @@ newGame scenarioId investigatorsList = do
 instance HasCount ClueCount LocationId Game where
   getCount lid g = fromJustNote "No location" $ getClueCount <$> g ^? locations . ix lid
 
-instance HasSet EnemyId Game where
-  getSet = HashMap.keysSet . view enemies
-
-instance HasSet AssetId Game where
-  getSet = HashMap.keysSet . view assets
+instance HasCount PlayerCount () Game where
+  getCount _ = PlayerCount . HashMap.size . view investigators
 
 instance HasSet DamageableAssetId Game where
   getSet = HashSet.map DamageableAssetId . HashMap.keysSet . HashMap.filter isDamageable . view assets
-
-instance HasSet LocationId Game where
-  getSet = HashMap.keysSet . view locations
-
-instance HasSet InvestigatorId Game where
-  getSet = HashMap.keysSet . view investigators
 
 instance HasQueue Game where
   messageQueue = lens giMessages $ \m x -> m { giMessages = x }
@@ -125,6 +139,22 @@ locationFor :: InvestigatorId -> Game -> LocationId
 locationFor iid g = locationOf investigator
  where
   investigator = fromJustNote "could not find investigator" $ g ^? investigators . ix iid
+
+drawToken :: MonadIO m => Game -> m Token
+drawToken Game {..} = do
+  n <- liftIO $ randomRIO (0, length giTokenBag - 1)
+  let token = fromJustNote "impossivle" $ giTokenBag !!? n
+  pPrint token
+  pure token
+
+runCheck :: (HasQueue env, MonadReader env m, MonadIO m) => Int -> Int -> Message -> m ()
+runCheck modifiedSkillValue difficulty onSuccess = do
+  putStrLn . pack
+    $ "Modified skill value: "
+    <> show modifiedSkillValue
+    <> "\nDifficulty: "
+    <> show difficulty
+  if modifiedSkillValue >= difficulty then unshiftMessage onSuccess else pure ()
 
 runGameMessage :: (HasQueue env, MonadReader env m, MonadIO m) => Message -> Game -> m Game
 runGameMessage msg g = case msg of
@@ -177,16 +207,40 @@ runGameMessage msg g = case msg of
       $ g
       & (enemies %~ HashMap.delete eid)
       & (discard %~ (getCardCode enemy :))
-  BeginInvestigation -> do
-    let
-      iid = fromJustNote "No investigators?" . headMay $ HashMap.keys (g ^. investigators)
-    g <$ traverse_
-      pushMessage
-      [ InvestigatorPlayCard iid "01021"
-      , InvestigatorDrawEncounterCard iid "01159"
-      , InvestigatorDrawEncounterCard iid "01159"
-      , InvestigatorDrawEncounterCard iid "01159"
-      ]
+  -- BeginInvestigation -> do
+  --   let
+  --     iid = fromJustNote "No investigators?" . headMay $ HashMap.keys (g ^. investigators)
+  --   g <$ traverse_
+  --     pushMessage
+  --     [ InvestigatorPlayCard iid "01021"
+  --     , InvestigatorDrawEncounterCard iid "01159"
+  --     , InvestigatorDrawEncounterCard iid "01159"
+  --     , InvestigatorDrawEncounterCard iid "01159"
+  --     ]
+  SkillCheck skillType difficulty skillValue onSuccess -> do
+    token <- drawToken g
+    g <$ unshiftMessage (ResolveToken token skillType difficulty skillValue onSuccess)
+  ResolveToken PlusOne _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue + 1) difficulty onSuccess
+  ResolveToken Zero _ difficulty skillValue onSuccess ->
+    g <$ runCheck skillValue difficulty onSuccess
+  ResolveToken MinusOne _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue - 1) difficulty onSuccess
+  ResolveToken MinusTwo _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue - 2) difficulty onSuccess
+  ResolveToken MinusThree _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue - 3) difficulty onSuccess
+  ResolveToken MinusFour _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue - 4) difficulty onSuccess
+  ResolveToken MinusFive _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue - 5) difficulty onSuccess
+  ResolveToken MinusSix _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue - 6) difficulty onSuccess
+  ResolveToken MinusSeven _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue - 7) difficulty onSuccess
+  ResolveToken MinusEight _ difficulty skillValue onSuccess ->
+    g <$ runCheck (skillValue - 8) difficulty onSuccess
+  ResolveToken AutoFail _ _ _ _ -> pure g
   InvestigatorDrawEncounterCard iid cardCode -> do
     (enemyId', enemy') <- createEnemy cardCode
     let lid = locationFor iid g
@@ -213,8 +267,10 @@ toExternalGame Game {..} = do
                   , gEnemies = giEnemies
                   , gAssets = giAssets
                   , gActiveInvestigatorId = giActiveInvestigatorId
+                  , gLeadInvestigatorId = giLeadInvestigatorId
                   , gPhase         = giPhase
                   , gDiscard         = giDiscard
+                  , gTokenBag         = giTokenBag
                   }
 
 toInternalGame' :: IORef [Message] -> GameJson -> Game
@@ -226,8 +282,10 @@ toInternalGame' ref GameJson {..} = do
        , giEnemies = gEnemies
        , giAssets = gAssets
        , giActiveInvestigatorId = gActiveInvestigatorId
+       , giLeadInvestigatorId = gLeadInvestigatorId
        , giPhase         = gPhase
        , giDiscard         = gDiscard
+       , giTokenBag = gTokenBag
        }
 
 runMessages :: MonadIO m => Game -> m (Maybe Question, GameJson)

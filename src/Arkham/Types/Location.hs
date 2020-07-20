@@ -92,19 +92,27 @@ newtype HallwayI = HallwayI Attrs
 hallway :: Location
 hallway = Hallway $ HallwayI $ baseAttrs "01112" "Hallway" 1 (Static 0)
 
-instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env Location where
+instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env Location where
   runMessage msg = \case
     Study x -> Study <$> runMessage msg x
     Hallway x -> Hallway <$> runMessage msg x
 
-instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env StudyI where
+instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env StudyI where
   runMessage msg (StudyI attrs)  = StudyI <$> runMessage msg attrs
 
-instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env HallwayI where
+instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env HallwayI where
   runMessage msg (HallwayI attrs) = HallwayI <$> runMessage msg attrs
 
-instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env Attrs where
+instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
+    Investigate skillType skillValue iid lid | lid == locationId ->
+      a <$ unshiftMessage
+        (SkillCheck
+          skillType
+          locationShroud
+          skillValue
+          (DiscoverClueAtLocation iid lid)
+        )
     DiscoverClueAtLocation iid lid | lid == locationId ->
       if locationClues > 0
         then do
@@ -117,6 +125,6 @@ instance (HasSet InvestigatorId env, HasQueue env) => RunMessage env Attrs where
     EnemyDefeated eid _ ->
       pure $ a & enemies %~ HashSet.delete eid
     RevealLocation lid | lid == locationId -> do
-      clueCount <- fromGameValue locationRevealClues <$> asks (HashSet.size . getSet @InvestigatorId)
+      clueCount <- fromGameValue locationRevealClues . unPlayerCount <$> asks (getCount ())
       pure $ a & clues .~ clueCount & revealed .~ True
     _ -> pure a

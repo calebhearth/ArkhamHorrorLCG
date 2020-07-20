@@ -3,6 +3,7 @@ module Arkham.Types.Message
   , Question(..)
   , Source(..)
   , ClueCount(..)
+  , PlayerCount(..)
   )
 where
 
@@ -11,11 +12,13 @@ import           Arkham.Types.Card
 import           Arkham.Types.EnemyId
 import           Arkham.Types.InvestigatorId
 import           Arkham.Types.LocationId
+import           Arkham.Types.SkillType
 import           Arkham.Types.Token
 import           ClassyPrelude
 import           Data.Aeson
 
 newtype ClueCount = ClueCount { unClueCount :: Int }
+newtype PlayerCount = PlayerCount { unPlayerCount :: Int }
 
 data Source = AssetSource AssetId
     | InvestigatorSource InvestigatorId
@@ -35,9 +38,10 @@ data Message = Setup
     | ChoosePlayCardAction InvestigatorId
     | ChooseActivateCardAbilityAction InvestigatorId
     | ActivateCardAbilityAction InvestigatorId CardCode Int
-    | ResolveToken Token InvestigatorId Int Int Message
+    | ResolveToken Token SkillType Int Int Message
     | ChooseMoveAction InvestigatorId
     | ChooseInvestigateAction InvestigatorId
+    | Investigate SkillType Int InvestigatorId LocationId
     | ChooseFightEnemyAction InvestigatorId
     | ChooseEvadeEnemyAction InvestigatorId
     | ChooseEngageEnemyAction InvestigatorId
@@ -62,6 +66,7 @@ data Message = Setup
     | InvestigatorPlayAsset InvestigatorId AssetId
     | DiscoverClueAtLocation InvestigatorId LocationId
     | DiscoverClue InvestigatorId
+    | SkillCheck SkillType Int Int Message
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 

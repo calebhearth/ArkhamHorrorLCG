@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9ad1496422265c21483dfa0eb7725c7561fb090ba9d32eb671eead78d155d4ac
+-- hash: dab0eb3015e4d6cf650d066f8e0ecafcdfe028a898aa797d1e4960fe8a5e5fb3
 
 name:           Arkham
 version:        0.1.0.0
@@ -43,6 +43,7 @@ library
       Arkham.Types.Phase
       Arkham.Types.Scenario
       Arkham.Types.ScenarioId
+      Arkham.Types.SkillType
       Arkham.Types.Token
       Arkham.Types.Trait
   other-modules:
@@ -61,6 +62,7 @@ library
     , microlens-platform
     , mtl
     , pretty-simple
+    , random
     , safe
     , unordered-containers
     , uuid
@@ -86,6 +88,7 @@ executable Arkham-exe
     , microlens-platform
     , mtl
     , pretty-simple
+    , random
     , safe
     , unordered-containers
     , uuid
@@ -112,6 +115,7 @@ test-suite Arkham-test
     , microlens-platform
     , mtl
     , pretty-simple
+    , random
     , safe
     , unordered-containers
     , uuid
