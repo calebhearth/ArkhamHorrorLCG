@@ -5,7 +5,7 @@ import           Data.Aeson
 
 data SkillType = SkillWillpower
     | SkillIntellect
-    | SkilLCombat
+    | SkillCombat
     | SkillAgility
     | SkillWild
     deriving stock (Show, Generic)

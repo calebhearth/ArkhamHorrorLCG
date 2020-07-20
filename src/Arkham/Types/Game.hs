@@ -17,6 +17,7 @@ import           Arkham.Types.Card
 import           Arkham.Types.Classes
 import           Arkham.Types.Enemy
 import           Arkham.Types.EnemyId
+import           Arkham.Types.Event
 import           Arkham.Types.GameJson
 import           Arkham.Types.Investigator
 import           Arkham.Types.InvestigatorId
@@ -159,12 +160,22 @@ runCheck modifiedSkillValue difficulty onSuccess = do
 runGameMessage :: (HasQueue env, MonadReader env m, MonadIO m) => Message -> Game -> m Game
 runGameMessage msg g = case msg of
   PlaceLocation lid -> pure $ g & locations . at lid ?~ lookupLocation lid
-  InvestigatorPlayCard iid cardCode -> do
-    mGame <- for (HashMap.lookup cardCode allAssets) $ \builder -> do
-                  aid <- liftIO $ AssetId <$> nextRandom
-                  unshiftMessage (InvestigatorPlayAsset iid aid)
-                  pure $ g & assets %~ HashMap.insert aid (builder aid)
-    pure . fromJustNote "something went very wrong" $ mGame
+  InvestigatorPlayCard iid cardCode _ -> do
+    let card = fromJustNote "Could not find card" $ HashMap.lookup cardCode allCards
+    case card of
+      PlayerCard pc ->
+        case pcCardType pc of
+          AssetType -> do
+            let builder = fromJustNote "could not find asset" $ HashMap.lookup cardCode allAssets
+            aid <- liftIO $ AssetId <$> nextRandom
+            unshiftMessage (InvestigatorPlayAsset iid aid)
+            pure $ g & assets %~ HashMap.insert aid (builder aid)
+          EventType -> do
+            let eventMessages = ($ iid) . fromJustNote "could not find event" $ HashMap.lookup cardCode allEvents
+            traverse_ unshiftMessage (reverse eventMessages)
+            pure g
+          _ -> pure g
+      EncounterCard _ -> pure g
   EnemyWillAttack iid eid -> do
     mNextMessage <- peekMessage
     case mNextMessage of

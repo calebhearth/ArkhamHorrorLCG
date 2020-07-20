@@ -2,7 +2,6 @@
 {-# LANGUAGE TypeFamilies          #-}
 module Arkham.Types.Classes where
 
-import           Arkham.Types.Card
 import           Arkham.Types.LocationId
 import           Arkham.Types.Message
 import           ClassyPrelude
@@ -38,9 +37,6 @@ pushMessage msg = withQueue $ \queue -> (queue <> [msg], ())
 
 unshiftMessage :: (MonadIO m, MonadReader env m, HasQueue env) => Message -> m ()
 unshiftMessage msg = withQueue $ \queue -> (msg:queue, ())
-
-class HasCardCode a where
-  getCardCode :: a -> CardCode
 
 class HasSet key a where
   getSet :: a -> HashSet key

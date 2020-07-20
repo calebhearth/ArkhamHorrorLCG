@@ -57,7 +57,7 @@ data Message = Setup
     | EnemyEngageInvestigator EnemyId InvestigatorId
     | EnemyDamage EnemyId Source Int
     | EnemyDefeated EnemyId Source
-    | InvestigatorPlayCard InvestigatorId CardCode
+    | InvestigatorPlayCard InvestigatorId CardCode Int
     | InvestigatorAssignDamage InvestigatorId EnemyId Int Int
     | AssetDamage AssetId EnemyId Int Int
     | AssetDefeated AssetId
