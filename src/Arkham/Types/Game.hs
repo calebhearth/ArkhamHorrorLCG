@@ -15,10 +15,12 @@ import           Arkham.Types.Asset
 import           Arkham.Types.AssetId
 import           Arkham.Types.Card
 import           Arkham.Types.Classes
+import           Arkham.Types.Difficulty
 import           Arkham.Types.Enemy
 import           Arkham.Types.EnemyId
 import           Arkham.Types.Event
 import           Arkham.Types.GameJson
+import           Arkham.Types.Helpers
 import           Arkham.Types.Investigator
 import           Arkham.Types.InvestigatorId
 import           Arkham.Types.Location
@@ -27,7 +29,10 @@ import           Arkham.Types.Message
 import           Arkham.Types.Phase
 import           Arkham.Types.Scenario
 import           Arkham.Types.ScenarioId
-import           Arkham.Types.Token
+import           Arkham.Types.SkillCheck
+import           Arkham.Types.Token          (Token)
+import qualified Arkham.Types.Token          as Token
+import           Arkham.Types.Trait
 import           ClassyPrelude
 import qualified Data.HashMap.Strict         as HashMap
 import qualified Data.HashSet                as HashSet
@@ -51,7 +56,8 @@ data Game = Game
     , giLeadInvestigatorId   :: InvestigatorId
     , giPhase                :: Phase
     , giDiscard              :: [CardCode]
-    , giTokenBag             :: [Token]
+    , giChaosBag             :: [Token]
+    , giSkillCheck           :: Maybe SkillCheck
     }
 
 locations :: Lens' Game (HashMap LocationId Location)
@@ -69,12 +75,18 @@ assets = lens giAssets $ \m x -> m { giAssets = x }
 discard :: Lens' Game [CardCode]
 discard = lens giDiscard $ \m x -> m { giDiscard = x }
 
+chaosBag :: Lens' Game [Token]
+chaosBag = lens giChaosBag $ \m x -> m { giChaosBag = x }
+
 activeInvestigatorId :: Lens' Game InvestigatorId
 activeInvestigatorId =
   lens giActiveInvestigatorId $ \m x -> m { giActiveInvestigatorId = x }
 
 scenario :: Lens' Game Scenario
 scenario = lens giScenario $ \m x -> m { giScenario = x }
+
+skillCheck :: Lens' Game (Maybe SkillCheck)
+skillCheck = lens giSkillCheck $ \m x -> m { giSkillCheck = x }
 
 activeInvestigator :: Game -> Investigator
 activeInvestigator g =
@@ -85,7 +97,7 @@ newGame :: MonadIO m => ScenarioId -> [Investigator] -> m Game
 newGame scenarioId investigatorsList = do
   ref <- newIORef [Setup]
   pure $ Game { giMessages             = ref
-              , giScenario             = lookupScenario scenarioId
+              , giScenario             = lookupScenario scenarioId Easy
               , giLocations            = mempty
               , giEnemies            = mempty
               , giAssets            = mempty
@@ -94,23 +106,24 @@ newGame scenarioId investigatorsList = do
               , giLeadInvestigatorId = initialInvestigatorId
               , giPhase                = Investigation
               , giDiscard = mempty
-              , giTokenBag =
-                [ PlusOne
-                , PlusOne
-                , Zero
-                , Zero
-                , Zero
-                , MinusOne
-                , MinusOne
-                , MinusOne
-                , MinusTwo
-                , MinusTwo
-                , Skull
-                , Skull
-                , Cultist
-                , Tablet
-                , AutoFail
-                , ElderSign
+              , giSkillCheck = Nothing
+              , giChaosBag =
+                [ Token.PlusOne
+                , Token.PlusOne
+                , Token.Zero
+                , Token.Zero
+                , Token.Zero
+                , Token.MinusOne
+                , Token.MinusOne
+                , Token.MinusOne
+                , Token.MinusTwo
+                , Token.MinusTwo
+                , Token.Skull
+                , Token.Skull
+                , Token.Cultist
+                , Token.Tablet
+                , Token.AutoFail
+                , Token.ElderSign
                 ]
               }
  where
@@ -124,6 +137,20 @@ instance HasCount ClueCount LocationId Game where
 
 instance HasCount PlayerCount () Game where
   getCount _ = PlayerCount . HashMap.size . view investigators
+
+
+-- fromSet :: (Eq key) => HashSet key -> HashMap key value -> [value]
+-- fromSet hset hmap = HashMap.foldrWithKey (\k v vs -> if k `elem` hset then (v:vs) else vs) [] hmap
+
+instance HasCount EnemyCount (LocationId, [Trait]) Game where
+  getCount (lid, traits) g@Game {..} = EnemyCount . length $ HashSet.filter enemyMatcher locationEnemies
+    where location = fromJustNote "No location" $ g ^? locations . ix lid
+          locationEnemies = getSet location
+          enemyMatcher eid =  all (flip HashSet.member (traitsOf $ g ^?! enemies . ix eid)) traits
+
+instance HasCount EnemyCount (CurrentInvestigatorLocation, [Trait]) Game where
+  getCount (_, traits) g@Game {..}  = getCount (locationId, traits) g
+    where locationId = locationFor giActiveInvestigatorId g
 
 instance HasSet DamageableAssetId Game where
   getSet = HashSet.map DamageableAssetId . HashMap.keysSet . HashMap.filter isDamageable . view assets
@@ -141,25 +168,17 @@ locationFor iid g = locationOf investigator
  where
   investigator = fromJustNote "could not find investigator" $ g ^? investigators . ix iid
 
-drawToken :: MonadIO m => Game -> m Token
+drawToken :: MonadIO m => Game -> m (Token, [Token])
 drawToken Game {..} = do
-  n <- liftIO $ randomRIO (0, length giTokenBag - 1)
-  let token = fromJustNote "impossivle" $ giTokenBag !!? n
+  n <- liftIO $ randomRIO (0, length giChaosBag - 1)
+  let token = fromJustNote "impossivle" $ giChaosBag !!? n
   pPrint token
-  pure token
-
-runCheck :: (HasQueue env, MonadReader env m, MonadIO m) => Int -> Int -> Message -> m ()
-runCheck modifiedSkillValue difficulty onSuccess = do
-  putStrLn . pack
-    $ "Modified skill value: "
-    <> show modifiedSkillValue
-    <> "\nDifficulty: "
-    <> show difficulty
-  if modifiedSkillValue >= difficulty then unshiftMessage onSuccess else pure ()
+  pure (token, without n giChaosBag)
 
 runGameMessage :: (HasQueue env, MonadReader env m, MonadIO m) => Message -> Game -> m Game
 runGameMessage msg g = case msg of
   PlaceLocation lid -> pure $ g & locations . at lid ?~ lookupLocation lid
+  ReturnTokens tokens -> pure $ g & chaosBag %~ (tokens <>)
   InvestigatorPlayCard iid cardCode _ -> do
     let card = fromJustNote "Could not find card" $ HashMap.lookup cardCode allCards
     case card of
@@ -228,30 +247,31 @@ runGameMessage msg g = case msg of
   --     , InvestigatorDrawEncounterCard iid "01159"
   --     , InvestigatorDrawEncounterCard iid "01159"
   --     ]
-  SkillCheck skillType difficulty skillValue onSuccess -> do
-    token <- drawToken g
-    g <$ unshiftMessage (ResolveToken token skillType difficulty skillValue onSuccess)
-  ResolveToken PlusOne _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue + 1) difficulty onSuccess
-  ResolveToken Zero _ difficulty skillValue onSuccess ->
-    g <$ runCheck skillValue difficulty onSuccess
-  ResolveToken MinusOne _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue - 1) difficulty onSuccess
-  ResolveToken MinusTwo _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue - 2) difficulty onSuccess
-  ResolveToken MinusThree _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue - 3) difficulty onSuccess
-  ResolveToken MinusFour _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue - 4) difficulty onSuccess
-  ResolveToken MinusFive _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue - 5) difficulty onSuccess
-  ResolveToken MinusSix _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue - 6) difficulty onSuccess
-  ResolveToken MinusSeven _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue - 7) difficulty onSuccess
-  ResolveToken MinusEight _ difficulty skillValue onSuccess ->
-    g <$ runCheck (skillValue - 8) difficulty onSuccess
-  ResolveToken AutoFail _ _ _ _ -> pure g
+  BeginSkillCheck iid _ difficulty skillValue onSuccess onFailure -> do
+    (token, chaosBag') <- drawToken g
+    unshiftMessage (ResolveToken token iid skillValue)
+    pure $ g & skillCheck ?~ SkillCheck iid difficulty onSuccess onFailure DrawOne ResolveAll [token] & chaosBag .~ chaosBag'
+  ResolveToken Token.PlusOne _ skillValue ->
+    g <$ runCheck (skillValue + 1)
+  ResolveToken Token.Zero _ skillValue ->
+    g <$ runCheck skillValue
+  ResolveToken Token.MinusOne _ skillValue ->
+    g <$ runCheck (skillValue - 1)
+  ResolveToken Token.MinusTwo _ skillValue ->
+    g <$ runCheck (skillValue - 2)
+  ResolveToken Token.MinusThree _ skillValue ->
+    g <$ runCheck (skillValue - 3)
+  ResolveToken Token.MinusFour _ skillValue ->
+    g <$ runCheck (skillValue - 4)
+  ResolveToken Token.MinusFive _ skillValue ->
+    g <$ runCheck (skillValue - 5)
+  ResolveToken Token.MinusSix _ skillValue ->
+    g <$ runCheck (skillValue - 6)
+  ResolveToken Token.MinusSeven _ skillValue ->
+    g <$ runCheck (skillValue - 7)
+  ResolveToken Token.MinusEight _ skillValue ->
+    g <$ runCheck (skillValue - 8)
+  ResolveToken Token.AutoFail _ _ -> g <$ unshiftMessage FailSkillCheck
   InvestigatorDrawEncounterCard iid cardCode -> do
     (enemyId', enemy') <- createEnemy cardCode
     let lid = locationFor iid g
@@ -266,6 +286,7 @@ instance RunMessage Game Game where
       >>= traverseOf (enemies . traverse) (runMessage msg)
       >>= traverseOf (assets . traverse) (runMessage msg)
       >>= traverseOf (investigators . traverse) (runMessage msg)
+      >>= traverseOf (skillCheck . traverse) (runMessage msg)
       >>= runGameMessage msg
 
 toExternalGame :: MonadIO m => Game -> m GameJson
@@ -281,7 +302,8 @@ toExternalGame Game {..} = do
                   , gLeadInvestigatorId = giLeadInvestigatorId
                   , gPhase         = giPhase
                   , gDiscard         = giDiscard
-                  , gTokenBag         = giTokenBag
+                  , gSkillCheck = giSkillCheck
+                  , gChaosBag         = giChaosBag
                   }
 
 toInternalGame' :: IORef [Message] -> GameJson -> Game
@@ -296,7 +318,8 @@ toInternalGame' ref GameJson {..} = do
        , giLeadInvestigatorId = gLeadInvestigatorId
        , giPhase         = gPhase
        , giDiscard         = gDiscard
-       , giTokenBag = gTokenBag
+       , giSkillCheck = gSkillCheck
+       , giChaosBag = gChaosBag
        }
 
 runMessages :: MonadIO m => Game -> m (Maybe Question, GameJson)
@@ -315,18 +338,6 @@ runMessages g = flip runReaderT g $ do
     Just msg -> case msg of
       Ask q -> (Just q, ) <$> toExternalGame g
       _     -> runMessage msg g >>= runMessages
-
-infix 9 !!?
-(!!?) :: [a] -> Int -> Maybe a
-(!!?) xs i
-    | i < 0     = Nothing
-    | otherwise = go i xs
-  where
-    go :: Int -> [a] -> Maybe a
-    go 0 (x:_)  = Just x
-    go j (_:ys) = go (j - 1) ys
-    go _ []     = Nothing
-{-# INLINE (!!?) #-}
 
 keepAsking :: forall a m . (Show a, Read a, MonadIO m) => String -> m a
 keepAsking s = do

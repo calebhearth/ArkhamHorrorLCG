@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cdfce9ac488fccf169378515e8caa4478021c6cb9a070884a2df87af5e7bf8fa
+-- hash: 59f27a3901b8ecb18b0835c9ce16fef687c36e93c68b1d8fe01789aa43dcf0e9
 
 name:           Arkham
 version:        0.1.0.0
@@ -31,11 +31,13 @@ library
       Arkham.Types.AssetId
       Arkham.Types.Card
       Arkham.Types.Classes
+      Arkham.Types.Difficulty
       Arkham.Types.Enemy
       Arkham.Types.EnemyId
       Arkham.Types.Event
       Arkham.Types.Game
       Arkham.Types.GameJson
+      Arkham.Types.Helpers
       Arkham.Types.Investigator
       Arkham.Types.InvestigatorId
       Arkham.Types.Location
@@ -44,6 +46,7 @@ library
       Arkham.Types.Phase
       Arkham.Types.Scenario
       Arkham.Types.ScenarioId
+      Arkham.Types.SkillCheck
       Arkham.Types.SkillType
       Arkham.Types.Token
       Arkham.Types.Trait

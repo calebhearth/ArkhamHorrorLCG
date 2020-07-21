@@ -1,6 +1,5 @@
 module Arkham.Types.GameJson where
 
-import           Arkham.Types.Token
 import           Arkham.Types.Asset
 import           Arkham.Types.AssetId
 import           Arkham.Types.Card
@@ -13,6 +12,8 @@ import           Arkham.Types.LocationId
 import           Arkham.Types.Message
 import           Arkham.Types.Phase
 import           Arkham.Types.Scenario
+import           Arkham.Types.SkillCheck
+import           Arkham.Types.Token
 import           ClassyPrelude
 import           Data.Aeson
 
@@ -27,7 +28,8 @@ data GameJson = GameJson
     , gLeadInvestigatorId   :: InvestigatorId
     , gPhase                :: Phase
     , gDiscard              :: [CardCode]
-    , gTokenBag             :: [Token]
+    , gSkillCheck           :: Maybe SkillCheck
+    , gChaosBag             :: [Token]
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)

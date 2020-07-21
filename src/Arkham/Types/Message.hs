@@ -4,6 +4,8 @@ module Arkham.Types.Message
   , Source(..)
   , ClueCount(..)
   , PlayerCount(..)
+  , EnemyCount(..)
+  , CurrentInvestigatorLocation(..)
   )
 where
 
@@ -14,14 +16,20 @@ import           Arkham.Types.InvestigatorId
 import           Arkham.Types.LocationId
 import           Arkham.Types.SkillType
 import           Arkham.Types.Token
+import           Arkham.Types.Trait
 import           ClassyPrelude
 import           Data.Aeson
 
+newtype EnemyCount = EnemyCount { unEnemyCount :: Int }
 newtype ClueCount = ClueCount { unClueCount :: Int }
 newtype PlayerCount = PlayerCount { unPlayerCount :: Int }
 
+data CurrentInvestigatorLocation = CurrentInvestigatorLocation
+
 data Source = AssetSource AssetId
+    | EnemySource EnemyId
     | InvestigatorSource InvestigatorId
+    | TokenSource Token
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
@@ -38,7 +46,7 @@ data Message = Setup
     | ChoosePlayCardAction InvestigatorId
     | ChooseActivateCardAbilityAction InvestigatorId
     | ActivateCardAbilityAction InvestigatorId CardCode Int
-    | ResolveToken Token SkillType Int Int Message
+    | ResolveToken Token InvestigatorId Int
     | ChooseMoveAction InvestigatorId
     | ChooseInvestigateAction InvestigatorId
     | Investigate SkillType Int InvestigatorId LocationId
@@ -62,11 +70,20 @@ data Message = Setup
     | AssetDamage AssetId EnemyId Int Int
     | AssetDefeated AssetId
     | AssetDiscarded AssetId CardCode
-    | InvestigatorDamage InvestigatorId EnemyId Int Int
+    | InvestigatorDamage InvestigatorId Source Int Int
     | InvestigatorPlayAsset InvestigatorId AssetId
     | DiscoverClueAtLocation InvestigatorId LocationId
     | DiscoverClue InvestigatorId
-    | SkillCheck SkillType Int Int Message
+    | BeginSkillCheck InvestigatorId SkillType Int Int [Message]
+                  [Message]
+    | RunSkillCheck Int
+    | AddOnFailure Message
+    | FailSkillCheck
+    | FindAndDrawEncounterCard InvestigatorId
+                           (EncounterCardType, [Trait])
+    | DrawAnotherToken InvestigatorId Int Token
+    | SkillTestEnds
+    | ReturnTokens [Token]
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 

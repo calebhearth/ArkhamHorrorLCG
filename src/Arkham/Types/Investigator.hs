@@ -5,6 +5,7 @@ import           Arkham.Types.AssetId
 import           Arkham.Types.Card
 import           Arkham.Types.Classes
 import           Arkham.Types.EnemyId
+import           Arkham.Types.Helpers
 import           Arkham.Types.InvestigatorId
 import           Arkham.Types.LocationId
 import           Arkham.Types.Message
@@ -156,15 +157,7 @@ sourceIsInvestigator :: Source -> Attrs -> Bool
 sourceIsInvestigator source Attrs {..} = case source of
   InvestigatorSource sourceId -> sourceId == investigatorId
   AssetSource sourceId        -> sourceId `elem` investigatorAssets
-
-runCheck :: (HasQueue env, MonadReader env m, MonadIO m) => Int -> Int -> Message -> m ()
-runCheck modifiedSkillValue difficulty onSuccess = do
-  putStrLn . pack
-    $ "Modified skill value: "
-    <> show modifiedSkillValue
-    <> "\nDifficulty: "
-    <> show difficulty
-  if modifiedSkillValue >= difficulty then unshiftMessage onSuccess else pure ()
+  _                           -> False
 
 instance (HasCount ClueCount LocationId env, HasSet DamageableAssetId env, HasQueue env) => RunMessage env RolandBanksI where
   runMessage msg rb@(RolandBanksI attrs@Attrs {..}) = case msg of
@@ -181,9 +174,9 @@ instance (HasCount ClueCount LocationId env, HasSet DamageableAssetId env, HasQu
       | cardCode == unInvestigatorId investigatorId -> case n of
         1 -> rb <$ unshiftMessage (DiscoverClueAtLocation investigatorId investigatorLocation)
         _ -> pure rb
-    ResolveToken ElderSign _ difficulty skillValue onSuccess -> do
+    ResolveToken ElderSign iid skillValue | iid == investigatorId -> do
       clueCount <- unClueCount <$> asks (getCount investigatorLocation)
-      rb <$ runCheck (skillValue + clueCount) difficulty onSuccess
+      rb <$ runCheck (skillValue + clueCount)
     _ -> RolandBanksI <$> runMessage msg attrs
 
 instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env DaisyWalkerI where
@@ -191,9 +184,6 @@ instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env DaisyWal
 
 lookupCard :: CardCode -> PlayerCard
 lookupCard cardCode = fromJustNote "Unknown card" $ HashMap.lookup cardCode allPlayerCards
-
-without :: Int -> [a] -> [a]
-without n as = [ a | (i, a) <- zip [0 ..] as, i /= n ]
 
 instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
@@ -207,7 +197,7 @@ instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env Attrs wh
       allDamageableAssets <- HashSet.toList . HashSet.intersection investigatorAssets . HashSet.map unDamageableAssetId <$> asks getSet
       a <$ unshiftMessage
         (Ask $ ChooseOne
-          (ChoiceResult (InvestigatorDamage investigatorId eid health sanity)
+          (ChoiceResult (InvestigatorDamage investigatorId (EnemySource eid) health sanity)
           : map (\k -> ChoiceResult $ AssetDamage k eid health sanity) allDamageableAssets
           )
         )

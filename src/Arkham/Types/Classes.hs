@@ -4,6 +4,7 @@ module Arkham.Types.Classes where
 
 import           Arkham.Types.LocationId
 import           Arkham.Types.Message
+import           Arkham.Types.Trait
 import           ClassyPrelude
 import           Lens.Micro
 import           Lens.Micro.Extras
@@ -38,6 +39,12 @@ pushMessage msg = withQueue $ \queue -> (queue <> [msg], ())
 unshiftMessage :: (MonadIO m, MonadReader env m, HasQueue env) => Message -> m ()
 unshiftMessage msg = withQueue $ \queue -> (msg:queue, ())
 
+runCheck
+  :: (HasQueue env, MonadReader env m, MonadIO m)
+  => Int
+  -> m ()
+runCheck modifiedSkillValue = unshiftMessage (RunSkillCheck modifiedSkillValue)
+
 class HasSet key a where
   getSet :: a -> HashSet key
 
@@ -49,3 +56,6 @@ class HasCount c b a where
 
 class HasClueCount a where
   getClueCount :: a -> ClueCount
+
+class HasTraits a where
+  traitsOf :: a -> HashSet Trait

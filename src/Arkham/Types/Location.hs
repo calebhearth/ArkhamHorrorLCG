@@ -42,6 +42,9 @@ data Attrs = Attrs
 instance HasClueCount Location where
   getClueCount = ClueCount . locationClues . locationAttrs
 
+instance HasSet EnemyId Location where
+  getSet = locationEnemies . locationAttrs
+
 investigators :: Lens' Attrs (HashSet InvestigatorId)
 investigators = lens locationInvestigators $ \m x -> m { locationInvestigators = x }
 
@@ -107,11 +110,13 @@ instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env Attrs whe
   runMessage msg a@Attrs {..} = case msg of
     Investigate skillType skillValue iid lid | lid == locationId ->
       a <$ unshiftMessage
-        (SkillCheck
+        (BeginSkillCheck
+          iid
           skillType
           locationShroud
           skillValue
-          (DiscoverClueAtLocation iid lid)
+          [DiscoverClueAtLocation iid lid]
+          []
         )
     DiscoverClueAtLocation iid lid | lid == locationId ->
       if locationClues > 0

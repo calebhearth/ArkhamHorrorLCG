@@ -9,6 +9,7 @@ import           Arkham.Types.EnemyId
 import           Arkham.Types.InvestigatorId
 import           Arkham.Types.LocationId
 import           Arkham.Types.Message
+import           Arkham.Types.Trait
 import           ClassyPrelude
 import           Data.Aeson
 import           Data.Coerce
@@ -28,6 +29,9 @@ allEnemies = HashMap.fromList
 
 instance HasCardCode Enemy where
   getCardCode = enemyCardCode . enemyAttrs
+
+instance HasTraits Enemy where
+  traitsOf = enemyTraits . enemyAttrs
 
 data GameValue = Static Int
     | PerPlayer Int
@@ -50,6 +54,7 @@ data Attrs = Attrs
     , enemyDamage               :: Int
     , enemyHealthDamage         :: Int
     , enemySanityDamage         :: Int
+    , enemyTraits               :: HashSet Trait
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -76,8 +81,8 @@ enemyAttrs = \case
   SwarmOfRats attrs -> coerce attrs
   GhoulMinion attrs -> coerce attrs
 
-baseAttrs :: EnemyId -> CardCode -> Text -> Attrs
-baseAttrs eid cardCode name = Attrs
+baseAttrs :: EnemyId -> CardCode -> Text -> [Trait] -> Attrs
+baseAttrs eid cardCode name traits = Attrs
   { enemyName = name
   , enemyId = eid
   , enemyCardCode = cardCode
@@ -89,19 +94,20 @@ baseAttrs eid cardCode name = Attrs
   , enemyDamage = 0
   , enemyHealthDamage = 0
   , enemySanityDamage = 0
+  , enemyTraits = HashSet.fromList traits
   }
 
 newtype SwarmOfRatsI = SwarmOfRatsI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 swarmOfRats :: EnemyId -> Enemy
-swarmOfRats uuid = SwarmOfRats $ SwarmOfRatsI $ (baseAttrs uuid "01159" "Swarm of Rats") { enemyHealthDamage = 1 }
+swarmOfRats uuid = SwarmOfRats $ SwarmOfRatsI $ (baseAttrs uuid "01159" "Swarm of Rats" [Creature]) { enemyHealthDamage = 1 }
 
 newtype GhoulMinionI = GhoulMinionI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 ghoulMinion :: EnemyId -> Enemy
-ghoulMinion uuid = GhoulMinion $ GhoulMinionI $ (baseAttrs uuid "01160" "Ghoul Minion") { enemyHealthDamage = 1, enemySanityDamage = 1 }
+ghoulMinion uuid = GhoulMinion $ GhoulMinionI $ (baseAttrs uuid "01160" "Ghoul Minion" [Humanoid, Monster, Ghoul]) { enemyHealthDamage = 1, enemySanityDamage = 1 }
 
 instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env Enemy where
   runMessage msg = \case
