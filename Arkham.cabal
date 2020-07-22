@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b4360e2980d3f50d45fb4184caa9cb999bf34e9fbef02be5276e85e7b482d028
+-- hash: 5c259353c87b47560bb558cb411fe5f00108417801b58b99d34820a4dbf818e7
 
 name:           Arkham
 version:        0.1.0.0
@@ -67,6 +67,7 @@ library
     , base >=4.7 && <5
     , bytestring
     , classy-prelude
+    , containers
     , hashable
     , microlens
     , microlens-platform
@@ -94,6 +95,7 @@ executable Arkham-exe
     , base >=4.7 && <5
     , bytestring
     , classy-prelude
+    , containers
     , hashable
     , microlens
     , microlens-platform
@@ -122,6 +124,7 @@ test-suite Arkham-test
     , base >=4.7 && <5
     , bytestring
     , classy-prelude
+    , containers
     , hashable
     , microlens
     , microlens-platform

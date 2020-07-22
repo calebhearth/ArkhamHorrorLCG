@@ -3,13 +3,14 @@ module Arkham.Types.Phase
   )
 where
 
-import           ClassyPrelude
-import           Data.Aeson
+import ClassyPrelude
+import Data.Aeson
 
-data Phase = MythosPhase
-    | InvestigationPhase
-    | EnemyPhase
-    | UpkeepPhase
-    | ResolutionPhase
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
+data Phase
+  = MythosPhase
+  | InvestigationPhase
+  | EnemyPhase
+  | UpkeepPhase
+  | ResolutionPhase
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)

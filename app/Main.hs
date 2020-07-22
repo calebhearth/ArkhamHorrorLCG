@@ -1,9 +1,9 @@
 module Main where
 
-import           Arkham.Types.Game
-import           Arkham.Types.Investigator
-import           ClassyPrelude
-import           Text.Pretty.Simple
+import Arkham.Types.Game
+import Arkham.Types.Investigator
+import ClassyPrelude
+import Text.Pretty.Simple
 
 main :: IO ()
 main = do

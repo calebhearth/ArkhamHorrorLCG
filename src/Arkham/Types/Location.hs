@@ -1,52 +1,55 @@
-{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Arkham.Types.Location (lookupLocation, Location(..)) where
+module Arkham.Types.Location
+  ( lookupLocation
+  , Location(..)
+  )
+where
 
-import           Arkham.Types.Classes
-import           Arkham.Types.EnemyId
-import           Arkham.Types.GameValue
-import           Arkham.Types.InvestigatorId
-import           Arkham.Types.LocationId
-import           Arkham.Types.LocationSymbol
-import           Arkham.Types.Message
-import           ClassyPrelude
-import           Data.Aeson
-import           Data.Coerce
-import qualified Data.HashMap.Strict         as HashMap
-import qualified Data.HashSet                as HashSet
-import           Lens.Micro
-import           Safe                        (fromJustNote)
-
+import Arkham.Types.Classes
+import Arkham.Types.EnemyId
+import Arkham.Types.GameValue
+import Arkham.Types.InvestigatorId
+import Arkham.Types.LocationId
+import Arkham.Types.LocationSymbol
+import Arkham.Types.Message
+import Arkham.Types.Trait
+import ClassyPrelude
+import Data.Aeson
+import Data.Coerce
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.HashSet as HashSet
+import Lens.Micro
+import Safe (fromJustNote)
 
 lookupLocation :: LocationId -> Location
-lookupLocation lid = fromJustNote ("Unkown location: " <> show lid) $ HashMap.lookup lid allLocations
+lookupLocation lid =
+  fromJustNote ("Unkown location: " <> show lid)
+    $ HashMap.lookup lid allLocations
 
 allLocations :: HashMap LocationId Location
-allLocations = HashMap.fromList $ map (\s -> (locationId . locationAttrs $ s, s))
-  [ study
-  , hallway
-  , attic
-  , cellar
-  , parlor
-  ]
+allLocations = HashMap.fromList $ map
+  (\s -> (locationId . locationAttrs $ s, s))
+  [study, hallway, attic, cellar, parlor]
 
 data Attrs = Attrs
-    { locationName               :: Text
-    , locationId                 :: LocationId
-    , locationRevealClues        :: GameValue
-    , locationClues              :: Int
-    , locationShroud             :: Int
-    , locationRevealed           :: Bool
-    , locationBlocked            :: Bool
-    , locationInvestigators      :: HashSet InvestigatorId
-    , locationEnemies            :: HashSet EnemyId
-    , locationVictory            :: Maybe Int
-    , locationSymbol             :: LocationSymbol
-    , locationConnectedSymbols   :: HashSet LocationSymbol
-    , locationConnectedLocations :: HashSet LocationId
-    }
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
+  { locationName               :: Text
+  , locationId                 :: LocationId
+  , locationRevealClues        :: GameValue
+  , locationClues              :: Int
+  , locationShroud             :: Int
+  , locationRevealed           :: Bool
+  , locationBlocked            :: Bool
+  , locationInvestigators      :: HashSet InvestigatorId
+  , locationEnemies            :: HashSet EnemyId
+  , locationVictory            :: Maybe Int
+  , locationSymbol             :: LocationSymbol
+  , locationConnectedSymbols   :: HashSet LocationSymbol
+  , locationConnectedLocations :: HashSet LocationId
+  , locationTraits             :: HashSet Trait
+  }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 instance HasClueCount Location where
   getClueCount = ClueCount . locationClues . locationAttrs
@@ -54,16 +57,29 @@ instance HasClueCount Location where
 instance HasSet EnemyId () Location where
   getSet _ = locationEnemies . locationAttrs
 
+instance HasSet InvestigatorId () Location where
+  getSet _ = locationInvestigators . locationAttrs
+
 instance HasSet ConnectedLocationId () Location where
-  getSet _ = HashSet.map ConnectedLocationId . locationConnectedLocations . locationAttrs
+  getSet _ =
+    HashSet.map ConnectedLocationId . locationConnectedLocations . locationAttrs
 
 investigators :: Lens' Attrs (HashSet InvestigatorId)
-investigators = lens locationInvestigators $ \m x -> m { locationInvestigators = x }
+investigators =
+  lens locationInvestigators $ \m x -> m { locationInvestigators = x }
 
 connectedLocations :: Lens' Attrs (HashSet LocationId)
-connectedLocations = lens locationConnectedLocations $ \m x -> m { locationConnectedLocations = x }
+connectedLocations =
+  lens locationConnectedLocations $ \m x -> m { locationConnectedLocations = x }
 
-baseAttrs :: LocationId -> Text -> Int -> GameValue -> LocationSymbol -> [LocationSymbol] -> Attrs
+baseAttrs
+  :: LocationId
+  -> Text
+  -> Int
+  -> GameValue
+  -> LocationSymbol
+  -> [LocationSymbol]
+  -> Attrs
 baseAttrs lid name shroud revealClues symbol' connectedSymbols' = Attrs
   { locationName = name
   , locationId = lid
@@ -75,9 +91,10 @@ baseAttrs lid name shroud revealClues symbol' connectedSymbols' = Attrs
   , locationInvestigators = mempty
   , locationEnemies = mempty
   , locationVictory = Nothing
-  , locationSymbol =  symbol'
+  , locationSymbol = symbol'
   , locationConnectedSymbols = HashSet.fromList connectedSymbols'
   , locationConnectedLocations = mempty
+  , locationTraits = mempty
   }
 
 clues :: Lens' Attrs Int
@@ -89,13 +106,14 @@ revealed = lens locationRevealed $ \m x -> m { locationRevealed = x }
 enemies :: Lens' Attrs (HashSet EnemyId)
 enemies = lens locationEnemies $ \m x -> m { locationEnemies = x }
 
-data Location = Study StudyI
-    | Hallway HallwayI
-    | Attic AtticI
-    | Cellar CellarI
-    | Parlor ParlorI
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
+data Location
+  = Study StudyI
+  | Hallway HallwayI
+  | Attic AtticI
+  | Cellar CellarI
+  | Parlor ParlorI
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 locationAttrs :: Location -> Attrs
 locationAttrs = \case
@@ -115,25 +133,40 @@ newtype HallwayI = HallwayI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 hallway :: Location
-hallway = Hallway $ HallwayI $ baseAttrs "01112" "Hallway" 1 (Static 0) Square [Triangle, Plus, Diamond]
+hallway = Hallway $ HallwayI $ baseAttrs
+  "01112"
+  "Hallway"
+  1
+  (Static 0)
+  Square
+  [Triangle, Plus, Diamond]
 
 newtype AtticI = AtticI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 attic :: Location
-attic = Attic $ AtticI $ (baseAttrs "01113" "Attic" 1 (PerPlayer 2) Triangle [Square]) { locationVictory = Just 1 }
+attic =
+  Attic $ AtticI $ (baseAttrs "01113" "Attic" 1 (PerPlayer 2) Triangle [Square])
+    { locationVictory = Just 1
+    }
 
 newtype CellarI = CellarI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 cellar :: Location
-cellar = Cellar $ CellarI $ (baseAttrs "01114" "Cellar" 4 (PerPlayer 2) Plus [Square]) { locationVictory = Just 1 }
+cellar =
+  Cellar $ CellarI $ (baseAttrs "01114" "Cellar" 4 (PerPlayer 2) Plus [Square])
+    { locationVictory = Just 1
+    }
 
 newtype ParlorI = ParlorI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 parlor :: Location
-parlor = Parlor $ ParlorI $ (baseAttrs "01115" "Parlor" 2 (Static 0) Diamond [Square]) { locationBlocked = True }
+parlor =
+  Parlor $ ParlorI $ (baseAttrs "01115" "Parlor" 2 (Static 0) Diamond [Square])
+    { locationBlocked = True
+    }
 
 type LocationRunner env = (HasCount PlayerCount () env, HasQueue env)
 
@@ -146,16 +179,24 @@ instance (LocationRunner env) => RunMessage env Location where
     Parlor x -> Parlor <$> runMessage msg x
 
 instance (LocationRunner env) => RunMessage env StudyI where
-  runMessage msg (StudyI attrs)  = StudyI <$> runMessage msg attrs
+  runMessage msg (StudyI attrs) = StudyI <$> runMessage msg attrs
 
 instance (LocationRunner env) => RunMessage env HallwayI where
   runMessage msg (HallwayI attrs) = HallwayI <$> runMessage msg attrs
 
 instance (LocationRunner env) => RunMessage env AtticI where
-  runMessage msg (AtticI attrs) = AtticI <$> runMessage msg attrs
+  runMessage msg a@(AtticI attrs@Attrs {..}) = case msg of
+    AfterEnterLocation iid lid | lid == locationId -> do
+      unshiftMessage (InvestigatorDamage iid (LocationSource locationId) 0 1)
+      pure a
+    _ -> AtticI <$> runMessage msg attrs
 
 instance (LocationRunner env) => RunMessage env CellarI where
-  runMessage msg (CellarI attrs) = CellarI <$> runMessage msg attrs
+  runMessage msg a@(CellarI attrs@Attrs {..}) = case msg of
+    AfterEnterLocation iid lid | lid == locationId -> do
+      unshiftMessage (InvestigatorDamage iid (LocationSource locationId) 1 0)
+      pure a
+    _ -> CellarI <$> runMessage msg attrs
 
 instance (LocationRunner env) => RunMessage env ParlorI where
   runMessage msg (ParlorI attrs) = ParlorI <$> runMessage msg attrs
@@ -172,26 +213,32 @@ instance (LocationRunner env) => RunMessage env Attrs where
           [DiscoverClueAtLocation iid lid]
           []
         )
-    PlacedLocation lid | lid == locationId ->
-      if locationBlocked then pure a else a <$ unshiftMessage (AddConnection lid locationSymbol)
+    PlacedLocation lid | lid == locationId -> if locationBlocked
+      then pure a
+      else a <$ unshiftMessage (AddConnection lid locationSymbol)
     AddConnection lid symbol' | symbol' `elem` locationConnectedSymbols -> do
-      unshiftMessages [AddConnectionBack locationId locationSymbol, AddedConnection locationId lid]
+      unshiftMessages
+        [ AddConnectionBack locationId locationSymbol
+        , AddedConnection locationId lid
+        ]
       pure $ a & connectedLocations %~ HashSet.insert lid
-    AddConnectionBack lid symbol' | symbol' `elem` locationConnectedSymbols -> do
-      unshiftMessage (AddedConnection locationId lid)
-      pure $ a & connectedLocations %~ HashSet.insert lid
-    DiscoverClueAtLocation iid lid | lid == locationId ->
-      if locationClues > 0
-        then do
-          unshiftMessage (DiscoverClue iid)
-          pure $ a & clues -~ 1
-        else pure a
-    MoveTo iid lid | lid == locationId -> pure $ a & investigators %~ HashSet.insert iid
+    AddConnectionBack lid symbol' | symbol' `elem` locationConnectedSymbols ->
+      do
+        unshiftMessage (AddedConnection locationId lid)
+        pure $ a & connectedLocations %~ HashSet.insert lid
+    DiscoverClueAtLocation iid lid | lid == locationId -> if locationClues > 0
+      then do
+        unshiftMessage (DiscoverClue iid)
+        pure $ a & clues -~ 1
+      else pure a
+    WhenEnterLocation iid lid | lid == locationId -> do
+      unless locationRevealed $ unshiftMessage (RevealLocation lid)
+      pure $ a & investigators %~ HashSet.insert iid
     EnemySpawn lid eid | lid == locationId ->
       pure $ a & enemies %~ HashSet.insert eid
-    EnemyDefeated eid _ ->
-      pure $ a & enemies %~ HashSet.delete eid
+    EnemyDefeated eid _ -> pure $ a & enemies %~ HashSet.delete eid
     RevealLocation lid | lid == locationId -> do
-      clueCount <- fromGameValue locationRevealClues . unPlayerCount <$> asks (getCount ())
+      clueCount <- fromGameValue locationRevealClues . unPlayerCount <$> asks
+        (getCount ())
       pure $ a & clues .~ clueCount & revealed .~ True
     _ -> pure a

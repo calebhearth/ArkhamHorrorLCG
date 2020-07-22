@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 module Arkham.Types.Act
   ( Act(..)
@@ -7,36 +7,35 @@ module Arkham.Types.Act
   )
 where
 
-import           Arkham.Types.ActId
-import           Arkham.Types.Classes
-import           Arkham.Types.EnemyId
-import           Arkham.Types.GameValue
-import           Arkham.Types.LocationId
-import           Arkham.Types.Message
-import           ClassyPrelude
-import           Data.Aeson
-import           Data.Coerce
-import qualified Data.HashMap.Strict     as HashMap
-import qualified Data.HashSet            as HashSet
-import           Lens.Micro
-import           Safe                    (fromJustNote)
+import Arkham.Types.ActId
+import Arkham.Types.Classes
+import Arkham.Types.EnemyId
+import Arkham.Types.GameValue
+import Arkham.Types.LocationId
+import Arkham.Types.Message
+import ClassyPrelude
+import Data.Aeson
+import Data.Coerce
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.HashSet as HashSet
+import Lens.Micro
+import Safe (fromJustNote)
 
 lookupAct :: ActId -> Act
 lookupAct = fromJustNote "Unknown act" . flip HashMap.lookup allActs
 
 allActs :: HashMap ActId Act
-allActs = HashMap.fromList $ map
-  (\a -> (actId $ actAttrs a, a))
-  [trapped, theBarrier, whatHaveYouDone]
+allActs = HashMap.fromList
+  $ map (\a -> (actId $ actAttrs a, a)) [trapped, theBarrier, whatHaveYouDone]
 
 data Attrs = Attrs
-    { actCanAdvance :: Bool
-    , actId         :: ActId
-    , actName       :: Text
-    , actSequence   :: Text
-    }
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
+  { actCanAdvance :: Bool
+  , actId         :: ActId
+  , actName       :: Text
+  , actSequence   :: Text
+  }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 canAdvance :: Lens' Attrs Bool
 canAdvance = lens actCanAdvance $ \m x -> m { actCanAdvance = x }
@@ -45,17 +44,19 @@ instance IsAdvanceable Act where
   isAdvanceable = actCanAdvance . actAttrs
 
 baseAttrs :: ActId -> Text -> Text -> Attrs
-baseAttrs aid name seq' = Attrs { actCanAdvance     = False
-                               , actId       = aid
-                               , actName     = name
-                               , actSequence = seq'
-                               }
+baseAttrs aid name seq' = Attrs
+  { actCanAdvance = False
+  , actId = aid
+  , actName = name
+  , actSequence = seq'
+  }
 
-data Act = Trapped TrappedI
-    | TheBarrier TheBarrierI
-    | WhatHaveYouDone WhatHaveYouDoneI
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
+data Act
+  = Trapped TrappedI
+  | TheBarrier TheBarrierI
+  | WhatHaveYouDone WhatHaveYouDoneI
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 actAttrs :: Act -> Attrs
 actAttrs = \case
@@ -73,15 +74,24 @@ newtype TheBarrierI = TheBarrierI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 theBarrier :: Act
-theBarrier = TheBarrier . TheBarrierI $ baseAttrs "01109" "The Barrier" "Act 2a"
+theBarrier =
+  TheBarrier . TheBarrierI $ baseAttrs "01109" "The Barrier" "Act 2a"
 
 newtype WhatHaveYouDoneI = WhatHaveYouDoneI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 whatHaveYouDone :: Act
-whatHaveYouDone = WhatHaveYouDone . WhatHaveYouDoneI $ baseAttrs "01110" "What Have You Done?" "Act 3a"
+whatHaveYouDone = WhatHaveYouDone . WhatHaveYouDoneI $ baseAttrs
+  "01110"
+  "What Have You Done?"
+  "Act 3a"
 
-type ActRunner env = (HasQueue env, HasCount ClueCount AllInvestigators env, HasSet EnemyId LocationId env, HasCount PlayerCount () env)
+type ActRunner env
+  = ( HasQueue env
+    , HasCount ClueCount AllInvestigators env
+    , HasSet EnemyId LocationId env
+    , HasCount PlayerCount () env
+    )
 
 instance (ActRunner env) => RunMessage env Act where
   runMessage msg = \case
@@ -94,29 +104,34 @@ instance (ActRunner env) => RunMessage env TrappedI where
     AdvanceAct aid | aid == actId -> do
       enemyIds <- HashSet.toList <$> asks (getSet (LocationId "01111"))
       a <$ unshiftMessages
-        ( [ PlaceLocation "01112"
-          , PlaceLocation "01114"
-          , PlaceLocation "01113"
-          , PlaceLocation "01115"
-          ]
-          <> map RemoveEnemy enemyIds
-          <> [ RevealLocation "01112"
-             , MoveAllTo "01112"
-             , RemoveLocation "01111"
-             , NextAct aid "01109"
+        ([ PlaceLocation "01112"
+         , PlaceLocation "01114"
+         , PlaceLocation "01113"
+         , PlaceLocation "01115"
+         ]
+        <> map RemoveEnemy enemyIds
+        <> [ RevealLocation "01112"
+           , MoveAllTo "01112"
+           , RemoveLocation "01111"
+           , NextAct aid "01109"
            ]
         )
     PrePlayerWindow -> do
       clueCount <- unClueCount <$> asks (getCount AllInvestigators)
       playerCount <- unPlayerCount <$> asks (getCount ())
-      pure $ TrappedI $ attrs & canAdvance .~ (clueCount >= fromGameValue (PerPlayer 2) playerCount)
+      pure
+        $ TrappedI
+        $ attrs
+        & canAdvance
+        .~ (clueCount >= fromGameValue (PerPlayer 2) playerCount)
     _ -> TrappedI <$> runMessage msg attrs
 
 instance (ActRunner env) => RunMessage env TheBarrierI where
   runMessage msg (TheBarrierI attrs) = TheBarrierI <$> runMessage msg attrs
 
 instance (ActRunner env) => RunMessage env WhatHaveYouDoneI where
-  runMessage msg (WhatHaveYouDoneI attrs) = WhatHaveYouDoneI <$> runMessage msg attrs
+  runMessage msg (WhatHaveYouDoneI attrs) =
+    WhatHaveYouDoneI <$> runMessage msg attrs
 
 instance (HasQueue env) => RunMessage env Attrs where
   runMessage _msg a@Attrs {..} = pure a

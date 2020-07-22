@@ -1,12 +1,13 @@
 module Arkham.Types.SkillType where
 
-import           ClassyPrelude
-import           Data.Aeson
+import ClassyPrelude
+import Data.Aeson
 
-data SkillType = SkillWillpower
-    | SkillIntellect
-    | SkillCombat
-    | SkillAgility
-    | SkillWild
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
+data SkillType
+  = SkillWillpower
+  | SkillIntellect
+  | SkillCombat
+  | SkillAgility
+  | SkillWild
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)

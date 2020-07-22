@@ -1,42 +1,42 @@
 module Arkham.Types.GameJson where
 
-import           Arkham.Types.Act
-import           Arkham.Types.ActId
-import           Arkham.Types.Agenda
-import           Arkham.Types.AgendaId
-import           Arkham.Types.Asset
-import           Arkham.Types.AssetId
-import           Arkham.Types.Card
-import           Arkham.Types.Enemy
-import           Arkham.Types.EnemyId
-import           Arkham.Types.Investigator
-import           Arkham.Types.InvestigatorId
-import           Arkham.Types.Location
-import           Arkham.Types.LocationId
-import           Arkham.Types.Message
-import           Arkham.Types.Phase
-import           Arkham.Types.Scenario
-import           Arkham.Types.SkillCheck
-import           Arkham.Types.Token
-import           ClassyPrelude
-import           Data.Aeson
+import Arkham.Types.Act
+import Arkham.Types.ActId
+import Arkham.Types.Agenda
+import Arkham.Types.AgendaId
+import Arkham.Types.Asset
+import Arkham.Types.AssetId
+import Arkham.Types.Card
+import Arkham.Types.Enemy
+import Arkham.Types.EnemyId
+import Arkham.Types.Investigator
+import Arkham.Types.InvestigatorId
+import Arkham.Types.Location
+import Arkham.Types.LocationId
+import Arkham.Types.Message
+import Arkham.Types.Phase
+import Arkham.Types.Scenario
+import Arkham.Types.SkillCheck
+import Arkham.Types.Token
+import ClassyPrelude
+import Data.Aeson
 
 data GameJson = GameJson
-    { gMessages             :: [Message]
-    , gSeed                 :: Int
-    , gScenario             :: Scenario
-    , gLocations            :: HashMap LocationId Location
-    , gInvestigators        :: HashMap InvestigatorId Investigator
-    , gEnemies              :: HashMap EnemyId Enemy
-    , gAssets               :: HashMap AssetId Asset
-    , gActiveInvestigatorId :: InvestigatorId
-    , gLeadInvestigatorId   :: InvestigatorId
-    , gPhase                :: Phase
-    , gDiscard              :: [CardCode]
-    , gSkillCheck           :: Maybe SkillCheck
-    , gChaosBag             :: [Token]
-    , gAgendas              :: HashMap AgendaId Agenda
-    , gActs                 :: HashMap ActId Act
-    }
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
+  { gMessages             :: [Message]
+  , gSeed                 :: Int
+  , gScenario             :: Scenario
+  , gLocations            :: HashMap LocationId Location
+  , gInvestigators        :: HashMap InvestigatorId Investigator
+  , gEnemies              :: HashMap EnemyId Enemy
+  , gAssets               :: HashMap AssetId Asset
+  , gActiveInvestigatorId :: InvestigatorId
+  , gLeadInvestigatorId   :: InvestigatorId
+  , gPhase                :: Phase
+  , gDiscard              :: [CardCode]
+  , gSkillCheck           :: Maybe SkillCheck
+  , gChaosBag             :: [Token]
+  , gAgendas              :: HashMap AgendaId Agenda
+  , gActs                 :: HashMap ActId Act
+  }
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)

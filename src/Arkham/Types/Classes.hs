@@ -1,13 +1,13 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeFamilies #-}
 module Arkham.Types.Classes where
 
-import           Arkham.Types.LocationId
-import           Arkham.Types.Message
-import           Arkham.Types.Trait
-import           ClassyPrelude
-import           Lens.Micro
-import           Lens.Micro.Extras
+import Arkham.Types.LocationId
+import Arkham.Types.Message
+import Arkham.Types.Trait
+import ClassyPrelude
+import Lens.Micro
+import Lens.Micro.Extras
 
 class HasQueue a where
   messageQueue :: Lens' a (IORef [Message])
@@ -26,29 +26,29 @@ withQueue body = do
 popMessage :: (MonadIO m, MonadReader env m, HasQueue env) => m (Maybe Message)
 popMessage = withQueue $ \case
   [] -> ([], Nothing)
-  (m:ms) -> (ms, Just m)
+  (m : ms) -> (ms, Just m)
 
 peekMessage :: (MonadIO m, MonadReader env m, HasQueue env) => m (Maybe Message)
 peekMessage = withQueue $ \case
   [] -> ([], Nothing)
-  (m:ms) -> (m:ms, Just m)
+  (m : ms) -> (m : ms, Just m)
 
 pushMessage :: (MonadIO m, MonadReader env m, HasQueue env) => Message -> m ()
 pushMessage = pushMessages . pure
 
-pushMessages :: (MonadIO m, MonadReader env m, HasQueue env) => [Message] -> m()
+pushMessages
+  :: (MonadIO m, MonadReader env m, HasQueue env) => [Message] -> m ()
 pushMessages msgs = withQueue $ \queue -> (queue <> msgs, ())
 
-unshiftMessage :: (MonadIO m, MonadReader env m, HasQueue env) => Message -> m ()
+unshiftMessage
+  :: (MonadIO m, MonadReader env m, HasQueue env) => Message -> m ()
 unshiftMessage = unshiftMessages . pure
 
-unshiftMessages :: (MonadIO m, MonadReader env m, HasQueue env) => [Message] -> m ()
+unshiftMessages
+  :: (MonadIO m, MonadReader env m, HasQueue env) => [Message] -> m ()
 unshiftMessages msgs = withQueue $ \queue -> (msgs <> queue, ())
 
-runCheck
-  :: (HasQueue env, MonadReader env m, MonadIO m)
-  => Int
-  -> m ()
+runCheck :: (HasQueue env, MonadReader env m, MonadIO m) => Int -> m ()
 runCheck modifiedSkillValue = unshiftMessage (RunSkillCheck modifiedSkillValue)
 
 class HasSet c b a where
