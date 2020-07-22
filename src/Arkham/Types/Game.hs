@@ -122,7 +122,7 @@ newGame scenarioId investigatorsList = do
   liftIO $ setStdGen (mkStdGen seed)
   pure $ Game { giMessages             = ref
               , giSeed = seed
-              , giScenario             = lookupScenario scenarioId Hard
+              , giScenario             = lookupScenario scenarioId Easy
               , giLocations            = mempty
               , giEnemies            = mempty
               , giAssets            = mempty
@@ -188,6 +188,10 @@ instance HasSet AdvanceableActId () Game where
   getSet _ g = HashSet.map AdvanceableActId . HashMap.keysSet $ acts'
     where acts' = HashMap.filter isAdvanceable (g ^. acts)
 
+instance HasSet ConnectedLocationId LocationId Game where
+  getSet lid g = getSet () location
+    where location = fromJustNote "No location" $ g ^? locations . ix lid
+
 instance HasSet DamageableAssetId InvestigatorId Game where
   getSet iid g = HashSet.map DamageableAssetId . HashMap.keysSet $ assets'
     where investigator = fromJustNote "No investigator" $ g ^? investigators . ix iid
@@ -219,8 +223,12 @@ drawToken Game {..} = do
 
 runGameMessage :: (HasQueue env, MonadReader env m, MonadIO m) => Message -> Game -> m Game
 runGameMessage msg g = case msg of
-  PlaceLocation lid -> pure $ g & locations . at lid ?~ lookupLocation lid
+  PlaceLocation lid -> do
+    unshiftMessage (PlacedLocation lid)
+    pure $ g & locations . at lid ?~ lookupLocation lid
+  RemoveLocation lid -> pure $ g & locations %~ HashMap.delete lid
   NextAgenda aid1 aid2 -> pure $ g & agendas %~ HashMap.delete aid1 & agendas %~ HashMap.insert aid2 (lookupAgenda aid2)
+  NextAct aid1 aid2 -> pure $ g & acts %~ HashMap.delete aid1 & acts %~ HashMap.insert aid2 (lookupAct aid2)
   AddAct aid -> pure $ g & acts . at aid ?~ lookupAct aid
   AddAgenda aid -> pure $ g & agendas . at aid ?~ lookupAgenda aid
   SkillTestEnds -> pure $ g & skillCheck .~ Nothing

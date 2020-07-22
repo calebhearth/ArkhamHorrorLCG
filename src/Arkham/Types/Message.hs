@@ -18,6 +18,7 @@ import           Arkham.Types.Card
 import           Arkham.Types.EnemyId
 import           Arkham.Types.InvestigatorId
 import           Arkham.Types.LocationId
+import           Arkham.Types.LocationSymbol
 import           Arkham.Types.SkillType
 import           Arkham.Types.Token
 import           Arkham.Types.Trait
@@ -71,6 +72,10 @@ data Message = Setup
     | AdvanceAct ActId
     | AllDrawEncounterCard
     | PlaceLocation LocationId
+    | PlacedLocation LocationId
+    | AddConnection LocationId LocationSymbol
+    | AddConnectionBack LocationId LocationSymbol
+    | AddedConnection LocationId LocationId
     | RevealLocation LocationId
     | RemoveLocation LocationId
     | RemoveEnemy EnemyId

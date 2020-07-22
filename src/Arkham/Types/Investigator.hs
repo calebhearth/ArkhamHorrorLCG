@@ -78,6 +78,9 @@ instance GetInvestigatorId Investigator where
 locationId :: Lens' Attrs LocationId
 locationId = lens investigatorLocation $ \m x -> m { investigatorLocation = x }
 
+connectedLocations :: Lens' Attrs (HashSet LocationId)
+connectedLocations = lens investigatorConnectedLocations $ \m x -> m { investigatorConnectedLocations = x }
+
 endedTurn :: Lens' Attrs Bool
 endedTurn = lens investigatorEndedTurn $ \m x -> m { investigatorEndedTurn = x }
 
@@ -173,6 +176,7 @@ type InvestigatorRunner env =
   , HasSet DamageableAssetId InvestigatorId env
   , HasQueue env
   , HasSet AdvanceableActId () env
+  , HasSet ConnectedLocationId LocationId env
   )
 
 instance (InvestigatorRunner env) => RunMessage env Investigator where
@@ -220,6 +224,8 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
     EnemyDefeated eid _ -> pure $ a & engagedEnemies %~ HashSet.delete eid
     AssetDiscarded aid cardCode | aid `elem` investigatorAssets ->
       pure $ a & assets %~ HashSet.delete aid & discard %~ (lookupCard cardCode:)
+    ChooseMoveAction iid | iid == investigatorId ->
+      a <$ unshiftMessage (Ask $ ChooseOne $ map (\l -> ChoiceResults [CheckAttackOfOpportunity iid, MoveTo iid l]) (HashSet.toList investigatorConnectedLocations))
     InvestigatorAssignDamage iid eid health sanity | iid == investigatorId -> do
       allDamageableAssets <- HashSet.toList . HashSet.map unDamageableAssetId <$> asks (getSet iid)
       a <$ unshiftMessage
@@ -240,7 +246,11 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
     InvestigatorDamage iid _ health sanity
       | iid == investigatorId -> pure $ a & healthDamage +~ health & sanityDamage +~ sanity
     MoveAllTo lid -> a <$ unshiftMessage (MoveTo investigatorId lid)
-    MoveTo iid lid | iid == investigatorId -> pure $ a  & locationId .~ lid
+    MoveTo iid lid | iid == investigatorId -> do
+      connectedLocations' <- HashSet.map unConnectedLocationId <$> asks (getSet lid)
+      pure $ a  & locationId .~ lid & connectedLocations .~ connectedLocations'
+    AddedConnection lid1 lid2 | lid1 == investigatorLocation || lid2 == investigatorLocation->
+      pure $ a & connectedLocations %~ HashSet.insert lid1 & connectedLocations %~ HashSet.insert lid2
     ChooseEndTurn iid | iid == investigatorId -> pure $ a & endedTurn .~ True
     BeginRound -> pure $ a & endedTurn .~ False & remainingActions .~ 3
     ChooseDrawCardAction iid | iid == investigatorId -> do
@@ -266,10 +276,11 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
           handUpdate = maybe id ((:) . PlayerCard) mcard
       when (null deck') $ unshiftMessage (EmptyDeck investigatorId)
       pure $ a & resources +~ 1 & hand %~ handUpdate & deck .~ deck'
-    PlayerWindow iid | iid == investigatorId ->
+    PlayerWindow iid | iid == investigatorId -> do
+      advanceableActIds <- HashSet.toList . HashSet.map unAdvanceableActId <$> asks (getSet ())
+      let advanceActions = map (ChoiceResult . AdvanceAct) advanceableActIds
       if a ^. remainingActions > 0
          then do
-           advanceableActIds <- HashSet.toList . HashSet.map unAdvanceableActId <$> asks (getSet ())
            let enemyActions =
                  if HashSet.size investigatorEngagedEnemies == 0
                     then []
@@ -278,7 +289,6 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
                          , ChooseEvadeEnemyAction
                          ]
                moveActions = [ ChooseMoveAction | HashSet.size investigatorConnectedLocations > 0]
-               advanceActions = map (ChoiceResult . AdvanceAct) advanceableActIds
 
            a <$ unshiftMessage ( Ask
              $ ChooseOne
@@ -294,5 +304,5 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
                  <> [ ChooseEndTurn ]
                ) <> advanceActions
             )
-        else a <$ unshiftMessage (Ask $ ChooseOne [ChoiceResult $ ChooseEndTurn iid])
+        else a <$ unshiftMessage (Ask $ ChooseOne $ advanceActions <> [ChoiceResult $ ChooseEndTurn iid])
     _ -> pure a
