@@ -3,6 +3,8 @@ module Arkham.Types.Scenario
   ( lookupScenario, Scenario )
 where
 
+import           Arkham.Types.ActId
+import           Arkham.Types.AgendaId
 import           Arkham.Types.Card
 import           Arkham.Types.Classes
 import           Arkham.Types.Difficulty
@@ -26,9 +28,12 @@ allScenarios = HashMap.fromList
   ]
 
 data Attrs = Attrs
-    { scenarioName       :: Text
-    , scenarioId         :: ScenarioId
-    , scenarioDifficulty :: Difficulty
+    { scenarioName        :: Text
+    , scenarioId          :: ScenarioId
+    , scenarioDifficulty  :: Difficulty
+    -- These types are to handle complex scenarios with multiple stacks
+    , scenarioAgendaStack :: [[AgendaId]] -- These types are to handle complex scenarios with multiple stacks
+    , scenarioActStack    :: [[ActId]]
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -43,34 +48,38 @@ data Scenario = TheGathering TheGatheringI
 --   TheGathering attrs -> coerce attrs
 --   TheMidnightMasks attrs -> coerce attrs
 
-baseAttrs :: CardCode -> Text -> Difficulty -> Attrs
-baseAttrs cardCode name difficulty = Attrs
+baseAttrs :: CardCode -> Text -> [AgendaId] -> [ActId] -> Difficulty -> Attrs
+baseAttrs cardCode name agendaStack actStack difficulty = Attrs
   { scenarioId = ScenarioId cardCode
   , scenarioName = name
   , scenarioDifficulty = difficulty
+  , scenarioAgendaStack = [agendaStack]
+  , scenarioActStack = [actStack]
   }
 
 newtype TheGatheringI = TheGatheringI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 theGathering :: Difficulty -> Scenario
-theGathering = TheGathering . TheGatheringI . baseAttrs "01104" "The Gathering"
+theGathering = TheGathering . TheGatheringI . baseAttrs "01104" "The Gathering" ["01105", "01106", "01107"] ["01108", "01109", "01110"]
 
 newtype TheMidnightMasksI = TheMidnightMasksI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 theMidnightMasks :: Difficulty -> Scenario
-theMidnightMasks = TheMidnightMasks . TheMidnightMasksI . baseAttrs "01120" "The Midnight Masks"
+theMidnightMasks = TheMidnightMasks . TheMidnightMasksI . baseAttrs "01120" "The Midnight Masks" [] []
 
-instance (HasCount EnemyCount (CurrentInvestigatorLocation, [Trait]) env, HasQueue env) => RunMessage env Scenario where
+type ScenarioRunner env = (HasCount EnemyCount (InvestigatorLocation, [Trait]) env, HasQueue env)
+
+instance (ScenarioRunner env) => RunMessage env Scenario where
   runMessage msg = \case
     TheGathering x -> TheGathering <$> runMessage msg x
     TheMidnightMasks x -> TheMidnightMasks <$> runMessage msg x
 
-instance (HasCount EnemyCount (CurrentInvestigatorLocation, [Trait]) env, HasQueue env) => RunMessage env TheGatheringI where
+instance (ScenarioRunner env) => RunMessage env TheGatheringI where
   runMessage msg s@(TheGatheringI Attrs {..}) = case msg of
-    Setup -> s <$ traverse_
-      pushMessage
+    Setup -> s <$
+      pushMessages
       [ PlaceLocation "01111"
       , RevealLocation "01111"
       , MoveAllTo "01111"
@@ -79,7 +88,7 @@ instance (HasCount EnemyCount (CurrentInvestigatorLocation, [Trait]) env, HasQue
     ResolveToken Token.Skull iid skillValue ->
       if scenarioDifficulty `elem` [Easy, Standard]
          then do
-           ghoulCount <- unEnemyCount <$> asks (getCount (CurrentInvestigatorLocation, [Ghoul]))
+           ghoulCount <- unEnemyCount <$> asks (getCount (InvestigatorLocation iid, [Ghoul]))
            s <$ runCheck (skillValue - ghoulCount)
          else do
            unshiftMessage (AddOnFailure $ FindAndDrawEncounterCard iid (EnemyType, [Ghoul]))
@@ -94,7 +103,7 @@ instance (HasCount EnemyCount (CurrentInvestigatorLocation, [Trait]) env, HasQue
            unshiftMessage (AddOnFailure $ InvestigatorDamage iid (TokenSource Token.Cultist) 0 2)
            pure s
     ResolveToken Token.Tablet iid skillValue -> do
-      ghoulCount <- unEnemyCount <$> asks (getCount (CurrentInvestigatorLocation, [Ghoul]))
+      ghoulCount <- unEnemyCount <$> asks (getCount (InvestigatorLocation iid, [Ghoul]))
       if scenarioDifficulty `elem` [Easy, Standard]
          then do
            when (ghoulCount > 0) $ unshiftMessage (InvestigatorDamage iid (TokenSource Token.Tablet) 1 0)
@@ -104,5 +113,5 @@ instance (HasCount EnemyCount (CurrentInvestigatorLocation, [Trait]) env, HasQue
            s <$ runCheck (skillValue - 4)
     _ -> pure s
 
-instance (HasQueue env) => RunMessage env TheMidnightMasksI where
+instance (ScenarioRunner env) => RunMessage env TheMidnightMasksI where
   runMessage _ = pure

@@ -113,12 +113,14 @@ guardDog :: AssetId -> Asset
 guardDog uuid = GuardDog $ GuardDogI $ (baseAttrs uuid "01021" 3 "Guard Dog" traits) { assetSlots = [AllySlot], assetHealth = Just 3, assetSanity = Just 1 }
   where traits = HashSet.fromList [Ally, Creature]
 
-instance (HasQueue env) => RunMessage env Asset where
+type AssetRunner env = (HasQueue env)
+
+instance (AssetRunner env) => RunMessage env Asset where
   runMessage msg = \case
     GuardDog x -> GuardDog <$> runMessage msg x
     Machete x -> Machete <$> runMessage msg x
 
-instance (HasQueue env) => RunMessage env GuardDogI where
+instance (AssetRunner env) => RunMessage env GuardDogI where
   runMessage msg (GuardDogI attrs@Attrs{..}) = case msg of
     AssetDamage aid eid _ _ | aid == assetId -> do
       -- we must unshift the asset destroyed first before unshifting the question
@@ -136,10 +138,10 @@ instance (HasQueue env) => RunMessage env GuardDogI where
       pure $ GuardDogI result
     _ -> GuardDogI <$> runMessage msg attrs
 
-instance (HasQueue env) => RunMessage env MacheteI where
+instance (AssetRunner env) => RunMessage env MacheteI where
   runMessage msg (MacheteI attrs) = MacheteI <$> runMessage msg attrs
 
-instance (HasQueue env) => RunMessage env Attrs where
+instance (AssetRunner env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
     AssetDamage aid _ health sanity | aid == assetId -> do
       let a' = a & healthDamage +~ health & sanityDamage +~ sanity

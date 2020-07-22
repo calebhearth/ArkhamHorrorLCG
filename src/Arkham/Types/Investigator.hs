@@ -19,6 +19,7 @@ import qualified Data.HashSet                as HashSet
 import           Lens.Micro
 import           Lens.Micro.Extras
 import           Safe                        (fromJustNote)
+import           System.Random.Shuffle
 
 lookupInvestigator :: InvestigatorId -> Investigator
 lookupInvestigator iid = fromJustNote ("Unkown investigator: " <> show iid) $ HashMap.lookup iid allInvestigators
@@ -27,29 +28,33 @@ allInvestigators :: HashMap InvestigatorId Investigator
 allInvestigators = HashMap.fromList $ map (\s -> (investigatorId . investigatorAttrs $ s, s)) [rolandBanks, daisyWalker]
 
 instance HasCardCode Investigator where
-  getCardCode = unInvestigatorId . investigatorId . investigatorAttrs
+  getCardCode = getCardCode . investigatorAttrs
+
+instance HasCardCode Attrs where
+  getCardCode = unInvestigatorId . investigatorId
 
 data Attrs = Attrs
-    { investigatorName             :: Text
-    , investigatorId               :: InvestigatorId
-    , investigatorHealth           :: Int
-    , investigatorSanity           :: Int
-    , investigatorWillpower        :: Int
-    , investigatorIntellect        :: Int
-    , investigatorCombat           :: Int
-    , investigatorAgility          :: Int
-    , investigatorHealthDamage     :: Int
-    , investigatorSanityDamage     :: Int
-    , investigatorClues            :: Int
-    , investigatorResources        :: Int
-    , investigatorLocation         :: LocationId
-    , investigatorRemainingActions :: Int
-    , investigatorEndedTurn        :: Bool
-    , investigatorEngagedEnemies   :: HashSet EnemyId
-    , investigatorAssets           :: HashSet AssetId
-    , investigatorDeck             :: [PlayerCard]
-    , investigatorDiscard          :: [PlayerCard]
-    , investigatorHand             :: [Card]
+    { investigatorName               :: Text
+    , investigatorId                 :: InvestigatorId
+    , investigatorHealth             :: Int
+    , investigatorSanity             :: Int
+    , investigatorWillpower          :: Int
+    , investigatorIntellect          :: Int
+    , investigatorCombat             :: Int
+    , investigatorAgility            :: Int
+    , investigatorHealthDamage       :: Int
+    , investigatorSanityDamage       :: Int
+    , investigatorClues              :: Int
+    , investigatorResources          :: Int
+    , investigatorLocation           :: LocationId
+    , investigatorRemainingActions   :: Int
+    , investigatorEndedTurn          :: Bool
+    , investigatorEngagedEnemies     :: HashSet EnemyId
+    , investigatorAssets             :: HashSet AssetId
+    , investigatorDeck               :: [PlayerCard]
+    , investigatorDiscard            :: [PlayerCard]
+    , investigatorHand               :: [Card]
+    , investigatorConnectedLocations :: HashSet LocationId
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -96,6 +101,13 @@ discard = lens investigatorDeck $ \m x -> m { investigatorDiscard = x }
 hand :: Lens' Attrs [Card]
 hand = lens investigatorHand $ \m x -> m { investigatorHand = x }
 
+deck :: Lens' Attrs [PlayerCard]
+deck = lens investigatorDeck $ \m x -> m { investigatorDeck = x }
+
+drawCard :: [PlayerCard] -> (Maybe PlayerCard, [PlayerCard])
+drawCard []     = (Nothing, [])
+drawCard (x:xs) = (Just x, xs)
+
 data Investigator = RolandBanks RolandBanksI
     | DaisyWalker DaisyWalkerI
     deriving stock (Show, Generic)
@@ -131,6 +143,7 @@ baseAttrs iid name health sanity willpower intellect combat agility = Attrs
   , investigatorDiscard = mempty
   , investigatorHand = [PlayerCard $ lookupCard "01088", PlayerCard $ lookupCard "01021", PlayerCard $ lookupCard "01020"]
   -- , investigatorHand = mempty
+  , investigatorConnectedLocations = mempty
   }
 
 newtype RolandBanksI = RolandBanksI Attrs
@@ -140,7 +153,7 @@ hasEndedTurn :: Investigator -> Bool
 hasEndedTurn = view endedTurn . investigatorAttrs
 
 rolandBanks :: Investigator
-rolandBanks = RolandBanks $ RolandBanksI $ baseAttrs "01001" "Roland Banks" 9 5 3 3 4 2
+rolandBanks = RolandBanks $ RolandBanksI $ baseAttrs "01001" "Roland Banks" 9 5 3 2 4 2
 
 newtype DaisyWalkerI = DaisyWalkerI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
@@ -148,7 +161,9 @@ newtype DaisyWalkerI = DaisyWalkerI Attrs
 daisyWalker :: Investigator
 daisyWalker = DaisyWalker $ DaisyWalkerI $ baseAttrs "01002" "Daisy Walker" 5 9 3 5 2 2
 
-instance (HasCount ClueCount LocationId env, HasSet DamageableAssetId env, HasQueue env) => RunMessage env Investigator where
+type InvestigatorRunner env = (HasCount ClueCount LocationId env, HasSet DamageableAssetId env, HasQueue env)
+
+instance (InvestigatorRunner env) => RunMessage env Investigator where
   runMessage msg = \case
     RolandBanks x -> RolandBanks <$> runMessage msg x
     DaisyWalker x -> DaisyWalker <$> runMessage msg x
@@ -159,19 +174,19 @@ sourceIsInvestigator source Attrs {..} = case source of
   AssetSource sourceId        -> sourceId `elem` investigatorAssets
   _                           -> False
 
-instance (HasCount ClueCount LocationId env, HasSet DamageableAssetId env, HasQueue env) => RunMessage env RolandBanksI where
+instance (InvestigatorRunner env) => RunMessage env RolandBanksI where
   runMessage msg rb@(RolandBanksI attrs@Attrs {..}) = case msg of
     EnemyDefeated _ source | sourceIsInvestigator source attrs ->
       RolandBanksI <$> runMessage msg attrs <* unshiftMessage
         (Ask $ ChooseTo
           (ActivateCardAbilityAction
             investigatorId
-            (unInvestigatorId investigatorId)
+            (getCardCode attrs)
             1
           )
         )
     ActivateCardAbilityAction _ cardCode n
-      | cardCode == unInvestigatorId investigatorId -> case n of
+      | cardCode == getCardCode attrs -> case n of
         1 -> rb <$ unshiftMessage (DiscoverClueAtLocation investigatorId investigatorLocation)
         _ -> pure rb
     ResolveToken ElderSign iid skillValue | iid == investigatorId -> do
@@ -179,13 +194,13 @@ instance (HasCount ClueCount LocationId env, HasSet DamageableAssetId env, HasQu
       rb <$ runCheck (skillValue + clueCount)
     _ -> RolandBanksI <$> runMessage msg attrs
 
-instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env DaisyWalkerI where
+instance (InvestigatorRunner env) => RunMessage env DaisyWalkerI where
   runMessage msg (DaisyWalkerI attrs) = DaisyWalkerI <$> runMessage msg attrs
 
 lookupCard :: CardCode -> PlayerCard
 lookupCard cardCode = fromJustNote "Unknown card" $ HashMap.lookup cardCode allPlayerCards
 
-instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env Attrs where
+instance (InvestigatorRunner env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
     EnemySpawn lid eid | lid == investigatorLocation ->
       a <$ unshiftMessage (EnemyEngageInvestigator eid investigatorId)
@@ -201,10 +216,13 @@ instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env Attrs wh
           : map (\k -> ChoiceResult $ AssetDamage k eid health sanity) allDamageableAssets
           )
         )
-
-    ChooseInvestigateAction iid | iid == investigatorId ->
-      a <$ traverse_ unshiftMessage (reverse [CheckAttackOfOpportunity iid, Investigate SkillIntellect investigatorIntellect iid investigatorLocation])
+    ChooseInvestigateAction iid | iid == investigatorId -> do
+      unshiftMessages [CheckAttackOfOpportunity iid, Investigate SkillIntellect investigatorIntellect iid investigatorLocation]
+      pure $ a & remainingActions -~ 1
     DiscoverClue iid | iid == investigatorId -> pure $ a & clues +~ 1
+    PayCardCost iid _ n | iid == investigatorId -> do
+      let cost = getCost $ a ^?! hand . ix n
+      pure $ a & resources -~ cost
     InvestigatorPlayCard iid _ n | iid == investigatorId -> pure $ a & hand %~ without n
     InvestigatorPlayAsset iid aid | iid == investigatorId -> pure $ a & assets %~ HashSet.insert aid
     InvestigatorDamage iid _ health sanity
@@ -212,29 +230,54 @@ instance (HasSet DamageableAssetId env, HasQueue env) => RunMessage env Attrs wh
     MoveAllTo lid -> a <$ unshiftMessage (MoveTo investigatorId lid)
     MoveTo iid lid | iid == investigatorId -> pure $ a  & locationId .~ lid
     ChooseEndTurn iid | iid == investigatorId -> pure $ a & endedTurn .~ True
+    BeginRound -> pure $ a & endedTurn .~ False & remainingActions .~ 3
+    ChooseDrawCardAction iid | iid == investigatorId -> do
+      unshiftMessages [CheckAttackOfOpportunity iid, DrawCards iid 1]
+      pure $ a & remainingActions -~ 1
+    DrawCards iid _ | iid == investigatorId -> do
+      let (mcard, deck') = drawCard investigatorDeck
+          handUpdate = maybe id ((:) . PlayerCard) mcard
+      when (null deck') $ unshiftMessage (EmptyDeck investigatorId)
+      pure $ a & hand %~ handUpdate
     ChooseTakeResourceAction iid | iid == investigatorId -> do
-      traverse_ unshiftMessage (reverse [CheckAttackOfOpportunity iid, TakeResources iid 1])
+      unshiftMessages [CheckAttackOfOpportunity iid, TakeResources iid 1]
       pure $ a & remainingActions -~ 1
     ChoosePlayCardAction iid | iid == investigatorId -> do
-      unshiftMessage (Ask $ ChooseOne $ zipWith (\i c -> ChoiceResult $ InvestigatorPlayCard iid (getCardCode c) (i - 1)) [1..] investigatorHand)
+      unshiftMessage (Ask $ ChooseOne $ zipWith (\i c -> ChoiceResults [PayCardCost iid (getCardCode c) (i -1), CheckAttackOfOpportunity iid, InvestigatorPlayCard iid (getCardCode c) (i - 1)]) [1..] investigatorHand)
       pure $ a & remainingActions -~ 1
     TakeResources iid n | iid == investigatorId -> pure $ a & resources +~ n
+    EmptyDeck iid | iid == investigatorId -> do
+      deck' <- liftIO $ shuffleM investigatorDiscard
+      pure $ a & discard .~ [] & deck .~ deck'
+    AllDrawCardAndResource -> do
+      let (mcard, deck') = drawCard investigatorDeck
+          handUpdate = maybe id ((:) . PlayerCard) mcard
+      when (null deck') $ unshiftMessage (EmptyDeck investigatorId)
+      pure $ a & resources +~ 1 & hand %~ handUpdate & deck .~ deck'
     PlayerWindow iid | iid == investigatorId ->
       if a ^. remainingActions > 0
-         then a <$ unshiftMessage
-           ( Ask
-           $ ChooseOne
-             [ ChoiceResult $ ChooseTakeResourceAction iid
-             , ChoiceResult $ ChooseDrawCardAction iid
-             , ChoiceResult $ ChoosePlayCardAction iid
-             , ChoiceResult $ ChooseActivateCardAbilityAction iid
-             , ChoiceResult $ ChooseMoveAction iid
-             , ChoiceResult $ ChooseInvestigateAction iid
-             , ChoiceResult $ ChooseFightEnemyAction iid
-             , ChoiceResult $ ChooseEngageEnemyAction iid
-             , ChoiceResult $ ChooseEvadeEnemyAction iid
-             , ChoiceResult $ ChooseEndTurn iid
-             ]
-           )
+         then do
+           let enemyActions =
+                 if HashSet.size investigatorEngagedEnemies == 0
+                    then []
+                    else [ ChooseFightEnemyAction
+                         , ChooseEngageEnemyAction
+                         , ChooseEvadeEnemyAction
+                         ]
+               moveActions = [ ChooseMoveAction | HashSet.size investigatorConnectedLocations > 0]
+
+           a <$ unshiftMessage ( Ask
+             $ ChooseOne
+             $ map (ChoiceResult . ($ iid))
+             $ [ ChooseTakeResourceAction
+               , ChooseDrawCardAction
+               , ChoosePlayCardAction -- TODO: Can you actually play a card?
+               , ChooseActivateCardAbilityAction -- TODO: Can you actually trigger an ability
+               ]
+               <> moveActions
+               <> [ ChooseInvestigateAction ]
+               <> enemyActions
+               <> [ ChooseEndTurn ]
+             )
         else a <$ unshiftMessage (Ask $ ChooseOne [ChoiceResult $ ChooseEndTurn iid])
     _ -> pure a

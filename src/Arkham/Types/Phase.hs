@@ -6,10 +6,10 @@ where
 import           ClassyPrelude
 import           Data.Aeson
 
-data Phase = Mythos
-    | Investigation
-    | Enemy
-    | Upkeep
-    | Resolution
+data Phase = MythosPhase
+    | InvestigationPhase
+    | EnemyPhase
+    | UpkeepPhase
+    | ResolutionPhase
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)

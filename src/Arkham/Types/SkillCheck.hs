@@ -35,14 +35,20 @@ data SkillCheck = SkillCheck
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
+setAsideTokens :: Lens' SkillCheck [Token]
+setAsideTokens =
+  lens skillCheckSetAsideTokens $ \m x -> m { skillCheckSetAsideTokens = x }
+
 onFailure :: Lens' SkillCheck [Message]
 onFailure = lens skillCheckOnFailure $ \m x -> m { skillCheckOnFailure = x }
 
 instance (HasQueue env) => RunMessage env SkillCheck where
   runMessage msg s@SkillCheck {..} = case msg of
-    AddOnFailure m -> pure $ s & onFailure %~ (m :)
-    FailSkillCheck ->
-      s <$ traverse_ unshiftMessage (reverse skillCheckOnFailure)
+    AddOnFailure m     -> pure $ s & onFailure %~ (m :)
+    DrawToken    token -> pure $ s & setAsideTokens %~ (token :)
+    FailSkillCheck     -> do
+      unshiftMessage SkillTestEnds
+      s <$ unshiftMessages skillCheckOnFailure
     SkillTestEnds ->
       s <$ unshiftMessage (ReturnTokens skillCheckSetAsideTokens)
     RunSkillCheck modifiedSkillValue -> do
@@ -54,6 +60,6 @@ instance (HasQueue env) => RunMessage env SkillCheck where
         <> "\nDifficulty: "
         <> show skillCheckDifficulty
       if modifiedSkillValue >= skillCheckDifficulty
-        then s <$ traverse_ unshiftMessage (reverse skillCheckOnSuccess)
-        else s <$ traverse_ unshiftMessage (reverse skillCheckOnFailure)
+        then s <$ unshiftMessages skillCheckOnSuccess
+        else s <$ unshiftMessages skillCheckOnFailure
     _ -> pure s

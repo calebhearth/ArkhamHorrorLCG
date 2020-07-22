@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 59f27a3901b8ecb18b0835c9ce16fef687c36e93c68b1d8fe01789aa43dcf0e9
+-- hash: 2955190904b143aa881af22b4a7a20867245223e42ae428fb3440fc0a089ada5
 
 name:           Arkham
 version:        0.1.0.0
@@ -27,6 +27,10 @@ source-repository head
 
 library
   exposed-modules:
+      Arkham.Types.Act
+      Arkham.Types.ActId
+      Arkham.Types.Agenda
+      Arkham.Types.AgendaId
       Arkham.Types.Asset
       Arkham.Types.AssetId
       Arkham.Types.Card
@@ -37,6 +41,7 @@ library
       Arkham.Types.Event
       Arkham.Types.Game
       Arkham.Types.GameJson
+      Arkham.Types.GameValue
       Arkham.Types.Helpers
       Arkham.Types.Investigator
       Arkham.Types.InvestigatorId
@@ -54,7 +59,7 @@ library
       Paths_Arkham
   hs-source-dirs:
       src
-  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts
+  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts ConstraintKinds
   build-depends:
       aeson
     , aeson-pretty
@@ -67,6 +72,7 @@ library
     , mtl
     , pretty-simple
     , random
+    , random-shuffle
     , safe
     , unordered-containers
     , uuid
@@ -78,7 +84,7 @@ executable Arkham-exe
       Paths_Arkham
   hs-source-dirs:
       app
-  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts
+  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts ConstraintKinds
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Arkham
@@ -93,6 +99,7 @@ executable Arkham-exe
     , mtl
     , pretty-simple
     , random
+    , random-shuffle
     , safe
     , unordered-containers
     , uuid
@@ -105,7 +112,7 @@ test-suite Arkham-test
       Paths_Arkham
   hs-source-dirs:
       test
-  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts
+  default-extensions: NoImplicitPrelude RecordWildCards DerivingStrategies DeriveGeneric DeriveAnyClass LambdaCase FlexibleInstances MultiParamTypeClasses GeneralizedNewtypeDeriving OverloadedStrings TypeApplications TupleSections FlexibleContexts ConstraintKinds
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Arkham
@@ -120,6 +127,7 @@ test-suite Arkham-test
     , mtl
     , pretty-simple
     , random
+    , random-shuffle
     , safe
     , unordered-containers
     , uuid

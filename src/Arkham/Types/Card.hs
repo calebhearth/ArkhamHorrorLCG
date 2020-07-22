@@ -7,6 +7,7 @@ module Arkham.Types.Card
   , EncounterCardType(..)
   , ClassSymbol(..)
   , HasCardCode(..)
+  , HasCost(..)
   , allCards
   , allPlayerCards
   )
@@ -20,6 +21,9 @@ import qualified Data.HashMap.Strict    as HashMap
 
 class HasCardCode a where
   getCardCode :: a -> CardCode
+
+class HasCost a where
+  getCost :: a -> Int
 
 newtype CardCode = CardCode { unCardCode :: Text }
   deriving newtype (Show, Eq, ToJSON, FromJSON, ToJSONKey, FromJSONKey, Hashable, IsString)
@@ -54,6 +58,11 @@ instance HasCardCode Card where
   getCardCode (PlayerCard    card) = getCardCode card
   getCardCode (EncounterCard card) = getCardCode card
 
+instance HasCost Card where
+  getCost (PlayerCard card) = getCost card
+  getCost _                 = 0
+
+
 data PlayerCard = MkPlayerCard
     { pcCardCode   :: CardCode
     , pcCost       :: Int
@@ -68,6 +77,9 @@ data PlayerCard = MkPlayerCard
 
 instance HasCardCode PlayerCard where
   getCardCode = pcCardCode
+
+instance HasCost PlayerCard where
+  getCost = pcCost
 
 data EncounterCard = MkEncounterCard
     { ecCardType :: EncounterCardType

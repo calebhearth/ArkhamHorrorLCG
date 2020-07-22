@@ -5,10 +5,11 @@ module Arkham.Types.Message
   , ClueCount(..)
   , PlayerCount(..)
   , EnemyCount(..)
-  , CurrentInvestigatorLocation(..)
+  , InvestigatorLocation(..)
   )
 where
 
+import           Arkham.Types.AgendaId
 import           Arkham.Types.AssetId
 import           Arkham.Types.Card
 import           Arkham.Types.EnemyId
@@ -24,7 +25,7 @@ newtype EnemyCount = EnemyCount { unEnemyCount :: Int }
 newtype ClueCount = ClueCount { unClueCount :: Int }
 newtype PlayerCount = PlayerCount { unPlayerCount :: Int }
 
-data CurrentInvestigatorLocation = CurrentInvestigatorLocation
+newtype InvestigatorLocation = InvestigatorLocation InvestigatorId
 
 data Source = AssetSource AssetId
     | EnemySource EnemyId
@@ -34,7 +35,26 @@ data Source = AssetSource AssetId
     deriving anyclass (ToJSON, FromJSON)
 
 data Message = Setup
+    | BeginRound
+    | EndRoundWindow
+    | EndRound
+    | BeginMythos
+    | EndMythos
     | BeginInvestigation
+    | EndInvestigation
+    | BeginEnemy
+    | EndEnemy
+    | BeginUpkeep
+    | EndUpkeep
+    | HuntersMove
+    | EnemiesAttack
+    | ReadyExhausted
+    | AllDrawCardAndResource
+    | AllCheckHandSize
+    | PlaceDoomOnAgenda
+    | AdvanceAgendaIfThresholdSatisfied
+    | AdvanceAgenda AgendaId
+    | AllDrawEncounterCard
     | PlaceLocation LocationId
     | RevealLocation LocationId
     | MoveAllTo LocationId
@@ -84,12 +104,17 @@ data Message = Setup
     | DrawAnotherToken InvestigatorId Int Token
     | SkillTestEnds
     | ReturnTokens [Token]
+    | DrawToken Token
+    | EmptyDeck InvestigatorId
+    | DrawCards InvestigatorId Int
+    | PayCardCost InvestigatorId CardCode Int
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
 data Question = ChooseOne [Question]
     | ChooseOneAtATime [Question]
     | ChoiceResult Message
+    | ChoiceResults [Message]
     | ChooseTo Message
     deriving stock (Show, Generic)
     deriving anyclass (FromJSON, ToJSON)

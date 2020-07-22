@@ -4,6 +4,7 @@ module Arkham.Types.Location (lookupLocation, Location(..)) where
 
 import           Arkham.Types.Classes
 import           Arkham.Types.EnemyId
+import           Arkham.Types.GameValue
 import           Arkham.Types.InvestigatorId
 import           Arkham.Types.LocationId
 import           Arkham.Types.Message
@@ -20,11 +21,6 @@ lookupLocation lid = fromJustNote ("Unkown location: " <> show lid) $ HashMap.lo
 
 allLocations :: HashMap LocationId Location
 allLocations = HashMap.fromList $ map (\s -> (locationId . locationAttrs $ s, s)) [study, hallway]
-
-data GameValue = Static Int
-    | PerPlayer Int
-    deriving stock (Show, Generic)
-    deriving anyclass (ToJSON, FromJSON)
 
 data Attrs = Attrs
     { locationName          :: Text
@@ -63,10 +59,6 @@ baseAttrs lid name shroud revealClues = Attrs
 clues :: Lens' Attrs Int
 clues = lens locationClues $ \m x -> m { locationClues = x }
 
-fromGameValue :: GameValue -> Int -> Int
-fromGameValue (Static n) _     = n
-fromGameValue (PerPlayer n) pc = n * pc
-
 revealed :: Lens' Attrs Bool
 revealed = lens locationRevealed $ \m x -> m { locationRevealed = x }
 
@@ -95,18 +87,20 @@ newtype HallwayI = HallwayI Attrs
 hallway :: Location
 hallway = Hallway $ HallwayI $ baseAttrs "01112" "Hallway" 1 (Static 0)
 
-instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env Location where
+type LocationRunner env = (HasCount PlayerCount () env, HasQueue env)
+
+instance (LocationRunner env) => RunMessage env Location where
   runMessage msg = \case
     Study x -> Study <$> runMessage msg x
     Hallway x -> Hallway <$> runMessage msg x
 
-instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env StudyI where
+instance (LocationRunner env) => RunMessage env StudyI where
   runMessage msg (StudyI attrs)  = StudyI <$> runMessage msg attrs
 
-instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env HallwayI where
+instance (LocationRunner env) => RunMessage env HallwayI where
   runMessage msg (HallwayI attrs) = HallwayI <$> runMessage msg attrs
 
-instance (HasCount PlayerCount () env, HasQueue env) => RunMessage env Attrs where
+instance (LocationRunner env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
     Investigate skillType skillValue iid lid | lid == locationId ->
       a <$ unshiftMessage

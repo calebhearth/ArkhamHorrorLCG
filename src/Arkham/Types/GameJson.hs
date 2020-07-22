@@ -1,5 +1,9 @@
 module Arkham.Types.GameJson where
 
+import           Arkham.Types.Act
+import           Arkham.Types.ActId
+import           Arkham.Types.Agenda
+import           Arkham.Types.AgendaId
 import           Arkham.Types.Asset
 import           Arkham.Types.AssetId
 import           Arkham.Types.Card
@@ -19,6 +23,7 @@ import           Data.Aeson
 
 data GameJson = GameJson
     { gMessages             :: [Message]
+    , gSeed                 :: Int
     , gScenario             :: Scenario
     , gLocations            :: HashMap LocationId Location
     , gInvestigators        :: HashMap InvestigatorId Investigator
@@ -30,6 +35,8 @@ data GameJson = GameJson
     , gDiscard              :: [CardCode]
     , gSkillCheck           :: Maybe SkillCheck
     , gChaosBag             :: [Token]
+    , gAgendas              :: HashMap AgendaId Agenda
+    , gActs                 :: HashMap ActId Act
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)

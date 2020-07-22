@@ -34,10 +34,16 @@ peekMessage = withQueue $ \case
   (m:ms) -> (m:ms, Just m)
 
 pushMessage :: (MonadIO m, MonadReader env m, HasQueue env) => Message -> m ()
-pushMessage msg = withQueue $ \queue -> (queue <> [msg], ())
+pushMessage = pushMessages . pure
+
+pushMessages :: (MonadIO m, MonadReader env m, HasQueue env) => [Message] -> m()
+pushMessages msgs = withQueue $ \queue -> (queue <> msgs, ())
 
 unshiftMessage :: (MonadIO m, MonadReader env m, HasQueue env) => Message -> m ()
-unshiftMessage msg = withQueue $ \queue -> (msg:queue, ())
+unshiftMessage = unshiftMessages . pure
+
+unshiftMessages :: (MonadIO m, MonadReader env m, HasQueue env) => [Message] -> m ()
+unshiftMessages msgs = withQueue $ \queue -> (msgs <> queue, ())
 
 runCheck
   :: (HasQueue env, MonadReader env m, MonadIO m)
