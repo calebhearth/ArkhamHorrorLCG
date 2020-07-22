@@ -38,8 +38,8 @@ data Attrs = Attrs
 instance HasClueCount Location where
   getClueCount = ClueCount . locationClues . locationAttrs
 
-instance HasSet EnemyId Location where
-  getSet = locationEnemies . locationAttrs
+instance HasSet EnemyId () Location where
+  getSet _ = locationEnemies . locationAttrs
 
 investigators :: Lens' Attrs (HashSet InvestigatorId)
 investigators = lens locationInvestigators $ \m x -> m { locationInvestigators = x }

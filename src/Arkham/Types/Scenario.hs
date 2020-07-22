@@ -32,8 +32,8 @@ data Attrs = Attrs
     , scenarioId          :: ScenarioId
     , scenarioDifficulty  :: Difficulty
     -- These types are to handle complex scenarios with multiple stacks
-    , scenarioAgendaStack :: [[AgendaId]] -- These types are to handle complex scenarios with multiple stacks
-    , scenarioActStack    :: [[ActId]]
+    , scenarioAgendaStack :: [(Int, [AgendaId])] -- These types are to handle complex scenarios with multiple stacks
+    , scenarioActStack    :: [(Int, [ActId])]
     }
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -53,8 +53,8 @@ baseAttrs cardCode name agendaStack actStack difficulty = Attrs
   { scenarioId = ScenarioId cardCode
   , scenarioName = name
   , scenarioDifficulty = difficulty
-  , scenarioAgendaStack = [agendaStack]
-  , scenarioActStack = [actStack]
+  , scenarioAgendaStack = [(1, agendaStack)]
+  , scenarioActStack = [(1, actStack)]
   }
 
 newtype TheGatheringI = TheGatheringI Attrs
@@ -80,7 +80,9 @@ instance (ScenarioRunner env) => RunMessage env TheGatheringI where
   runMessage msg s@(TheGatheringI Attrs {..}) = case msg of
     Setup -> s <$
       pushMessages
-      [ PlaceLocation "01111"
+      [ AddAgenda "01105"
+      , AddAct "01108"
+      , PlaceLocation "01111"
       , RevealLocation "01111"
       , MoveAllTo "01111"
       , BeginInvestigation

@@ -78,7 +78,7 @@ newtype TheyreGettingOutI = TheyreGettingOutI Attrs
 theyreGettingOut :: Agenda
 theyreGettingOut = TheyreGettingOut . TheyreGettingOutI $ baseAttrs "01107" "They're Getting Out!" "Agenda 3a" (Static 10)
 
-type AgendaRunner env = (HasCount PlayerCount () env, HasQueue env)
+type AgendaRunner env = (HasId LeadInvestigatorId env, HasCount PlayerCount () env, HasQueue env)
 
 instance (AgendaRunner env) => RunMessage env Agenda where
   runMessage msg = \case
@@ -87,7 +87,15 @@ instance (AgendaRunner env) => RunMessage env Agenda where
     TheyreGettingOut x -> TheyreGettingOut <$> runMessage msg x
 
 instance (AgendaRunner env) => RunMessage env WhatsGoingOnI where
-  runMessage msg (WhatsGoingOnI attrs) = WhatsGoingOnI <$> runMessage msg attrs
+  runMessage msg a@(WhatsGoingOnI attrs@Attrs {..}) =
+    case msg of
+      AdvanceAgenda aid | aid == agendaId -> do
+        leadInvestigatorId <- unLeadInvestigatorId <$> asks getId
+        a <$ unshiftMessages
+          [ Ask $ ChooseOne [ChoiceResult AllRandomDiscard, ChoiceResult (InvestigatorDamage leadInvestigatorId (AgendaSource aid) 0 2)]
+          , NextAgenda aid "01106"
+          ]
+      _ -> WhatsGoingOnI <$> runMessage msg attrs
 
 instance (AgendaRunner env) => RunMessage env RiseOfTheGhoulsI where
   runMessage msg (RiseOfTheGhoulsI attrs) = RiseOfTheGhoulsI <$> runMessage msg attrs

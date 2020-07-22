@@ -95,6 +95,10 @@ discard = lens giDiscard $ \m x -> m { giDiscard = x }
 chaosBag :: Lens' Game [Token]
 chaosBag = lens giChaosBag $ \m x -> m { giChaosBag = x }
 
+leadInvestigatorId :: Lens' Game InvestigatorId
+leadInvestigatorId =
+  lens giLeadInvestigatorId $ \m x -> m { giLeadInvestigatorId = x }
+
 activeInvestigatorId :: Lens' Game InvestigatorId
 activeInvestigatorId =
   lens giActiveInvestigatorId $ \m x -> m { giActiveInvestigatorId = x }
@@ -155,8 +159,17 @@ newGame scenarioId investigatorsList = do
   investigatorsMap =
     HashMap.fromList $ map (\i -> (getInvestigatorId i, i)) investigatorsList
 
+instance HasId LeadInvestigatorId Game where
+  getId = LeadInvestigatorId . view leadInvestigatorId
+
 instance HasCount ClueCount LocationId Game where
   getCount lid g = fromJustNote "No location" $ getClueCount <$> g ^? locations . ix lid
+
+instance HasCount ClueCount InvestigatorId Game where
+  getCount iid g = fromJustNote "No investigator" $ getClueCount <$> g ^? investigators . ix iid
+
+instance HasCount ClueCount AllInvestigators Game where
+  getCount _ g = mconcat $ map (flip getCount g) (g ^. investigators . to (HashMap.keys))
 
 instance HasCount PlayerCount () Game where
   getCount _ = PlayerCount . HashMap.size . view investigators
@@ -164,15 +177,26 @@ instance HasCount PlayerCount () Game where
 instance HasCount EnemyCount (LocationId, [Trait]) Game where
   getCount (lid, traits) g@Game {..} = EnemyCount . length $ HashSet.filter enemyMatcher locationEnemies
     where location = fromJustNote "No location" $ g ^? locations . ix lid
-          locationEnemies = getSet location
+          locationEnemies = getSet () location
           enemyMatcher eid =  all (flip HashSet.member (traitsOf $ g ^?! enemies . ix eid)) traits
 
 instance HasCount EnemyCount (InvestigatorLocation, [Trait]) Game where
   getCount (InvestigatorLocation iid, traits) g@Game {..}  = getCount (locationId, traits) g
     where locationId = locationFor iid g
 
-instance HasSet DamageableAssetId Game where
-  getSet = HashSet.map DamageableAssetId . HashMap.keysSet . HashMap.filter isDamageable . view assets
+instance HasSet AdvanceableActId () Game where
+  getSet _ g = HashSet.map AdvanceableActId . HashMap.keysSet $ acts'
+    where acts' = HashMap.filter isAdvanceable (g ^. acts)
+
+instance HasSet DamageableAssetId InvestigatorId Game where
+  getSet iid g = HashSet.map DamageableAssetId . HashMap.keysSet $ assets'
+    where investigator = fromJustNote "No investigator" $ g ^? investigators . ix iid
+          assetIds = getSet () investigator
+          assets' = HashMap.filterWithKey (\k v -> k `elem` assetIds && isDamageable v) (g ^. assets)
+
+instance HasSet EnemyId LocationId Game where
+  getSet lid g = getSet () location
+    where location = fromJustNote "No location" $ g ^? locations . ix lid
 
 instance HasQueue Game where
   messageQueue = lens giMessages $ \m x -> m { giMessages = x }
@@ -196,6 +220,9 @@ drawToken Game {..} = do
 runGameMessage :: (HasQueue env, MonadReader env m, MonadIO m) => Message -> Game -> m Game
 runGameMessage msg g = case msg of
   PlaceLocation lid -> pure $ g & locations . at lid ?~ lookupLocation lid
+  NextAgenda aid1 aid2 -> pure $ g & agendas %~ HashMap.delete aid1 & agendas %~ HashMap.insert aid2 (lookupAgenda aid2)
+  AddAct aid -> pure $ g & acts . at aid ?~ lookupAct aid
+  AddAgenda aid -> pure $ g & agendas . at aid ?~ lookupAgenda aid
   SkillTestEnds -> pure $ g & skillCheck .~ Nothing
   ReturnTokens tokens -> pure $ g & chaosBag %~ (tokens <>)
   InvestigatorPlayCard iid cardCode _ -> do
@@ -387,7 +414,7 @@ runMessages g = flip runReaderT g $ do
       UpkeepPhase        -> (Nothing, ) <$> toExternalGame g
       InvestigationPhase -> if hasEndedTurn (activeInvestigator g)
         then pushMessage (EndInvestigation) >> runMessages g
-        else pushMessage (PlayerWindow $ g ^. activeInvestigatorId) >> runMessages g
+        else pushMessages [PrePlayerWindow, PlayerWindow $ g ^. activeInvestigatorId] >> runMessages g
     Just msg -> case msg of
       Ask q -> (Just q, ) <$> toExternalGame g
       _     -> runMessage msg g >>= runMessages

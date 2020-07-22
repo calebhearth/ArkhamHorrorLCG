@@ -1,6 +1,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Arkham.Types.Investigator (hasEndedTurn, lookupInvestigator, GetInvestigatorId(..), Investigator) where
 
+import           Arkham.Types.ActId
 import           Arkham.Types.AssetId
 import           Arkham.Types.Card
 import           Arkham.Types.Classes
@@ -59,8 +60,14 @@ data Attrs = Attrs
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
+instance HasSet AssetId () Investigator where
+  getSet _ = investigatorAssets . investigatorAttrs
+
 instance HasLocation Investigator where
   locationOf = investigatorLocation . investigatorAttrs
+
+instance HasClueCount Investigator where
+  getClueCount = ClueCount . investigatorClues . investigatorAttrs
 
 class GetInvestigatorId a where
   getInvestigatorId :: a -> InvestigatorId
@@ -161,7 +168,12 @@ newtype DaisyWalkerI = DaisyWalkerI Attrs
 daisyWalker :: Investigator
 daisyWalker = DaisyWalker $ DaisyWalkerI $ baseAttrs "01002" "Daisy Walker" 5 9 3 5 2 2
 
-type InvestigatorRunner env = (HasCount ClueCount LocationId env, HasSet DamageableAssetId env, HasQueue env)
+type InvestigatorRunner env =
+  ( HasCount ClueCount LocationId env
+  , HasSet DamageableAssetId InvestigatorId env
+  , HasQueue env
+  , HasSet AdvanceableActId () env
+  )
 
 instance (InvestigatorRunner env) => RunMessage env Investigator where
   runMessage msg = \case
@@ -209,7 +221,7 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
     AssetDiscarded aid cardCode | aid `elem` investigatorAssets ->
       pure $ a & assets %~ HashSet.delete aid & discard %~ (lookupCard cardCode:)
     InvestigatorAssignDamage iid eid health sanity | iid == investigatorId -> do
-      allDamageableAssets <- HashSet.toList . HashSet.intersection investigatorAssets . HashSet.map unDamageableAssetId <$> asks getSet
+      allDamageableAssets <- HashSet.toList . HashSet.map unDamageableAssetId <$> asks (getSet iid)
       a <$ unshiftMessage
         (Ask $ ChooseOne
           (ChoiceResult (InvestigatorDamage investigatorId (EnemySource eid) health sanity)
@@ -257,6 +269,7 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
     PlayerWindow iid | iid == investigatorId ->
       if a ^. remainingActions > 0
          then do
+           advanceableActIds <- HashSet.toList . HashSet.map unAdvanceableActId <$> asks (getSet ())
            let enemyActions =
                  if HashSet.size investigatorEngagedEnemies == 0
                     then []
@@ -265,19 +278,21 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
                          , ChooseEvadeEnemyAction
                          ]
                moveActions = [ ChooseMoveAction | HashSet.size investigatorConnectedLocations > 0]
+               advanceActions = map (ChoiceResult . AdvanceAct) advanceableActIds
 
            a <$ unshiftMessage ( Ask
              $ ChooseOne
              $ map (ChoiceResult . ($ iid))
-             $ [ ChooseTakeResourceAction
-               , ChooseDrawCardAction
-               , ChoosePlayCardAction -- TODO: Can you actually play a card?
-               , ChooseActivateCardAbilityAction -- TODO: Can you actually trigger an ability
-               ]
-               <> moveActions
-               <> [ ChooseInvestigateAction ]
-               <> enemyActions
-               <> [ ChooseEndTurn ]
-             )
+               ([ ChooseTakeResourceAction
+                 , ChooseDrawCardAction
+                 , ChoosePlayCardAction -- TODO: Can you actually play a card?
+                 , ChooseActivateCardAbilityAction -- TODO: Can you actually trigger an ability
+                 ]
+                 <> moveActions
+                 <> [ ChooseInvestigateAction ]
+                 <> enemyActions
+                 <> [ ChooseEndTurn ]
+               ) <> advanceActions
+            )
         else a <$ unshiftMessage (Ask $ ChooseOne [ChoiceResult $ ChooseEndTurn iid])
     _ -> pure a

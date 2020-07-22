@@ -6,9 +6,12 @@ module Arkham.Types.Message
   , PlayerCount(..)
   , EnemyCount(..)
   , InvestigatorLocation(..)
+  , LeadInvestigatorId(..)
+  , AllInvestigators(..)
   )
 where
 
+import           Arkham.Types.ActId
 import           Arkham.Types.AgendaId
 import           Arkham.Types.AssetId
 import           Arkham.Types.Card
@@ -23,14 +26,25 @@ import           Data.Aeson
 
 newtype EnemyCount = EnemyCount { unEnemyCount :: Int }
 newtype ClueCount = ClueCount { unClueCount :: Int }
+
+instance Semigroup ClueCount where
+  (ClueCount a) <> (ClueCount b) = ClueCount (a + b)
+
+instance Monoid ClueCount where
+  mempty  = ClueCount 0
+  mappend = (<>)
+
 newtype PlayerCount = PlayerCount { unPlayerCount :: Int }
+newtype LeadInvestigatorId = LeadInvestigatorId { unLeadInvestigatorId :: InvestigatorId }
 
 newtype InvestigatorLocation = InvestigatorLocation InvestigatorId
+data AllInvestigators = AllInvestigators
 
 data Source = AssetSource AssetId
     | EnemySource EnemyId
     | InvestigatorSource InvestigatorId
     | TokenSource Token
+    | AgendaSource AgendaId
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
@@ -54,11 +68,15 @@ data Message = Setup
     | PlaceDoomOnAgenda
     | AdvanceAgendaIfThresholdSatisfied
     | AdvanceAgenda AgendaId
+    | AdvanceAct ActId
     | AllDrawEncounterCard
     | PlaceLocation LocationId
     | RevealLocation LocationId
+    | RemoveLocation LocationId
+    | RemoveEnemy EnemyId
     | MoveAllTo LocationId
     | MoveTo InvestigatorId LocationId
+    | PrePlayerWindow
     | PlayerWindow InvestigatorId
     | Ask Question
     | ChooseTakeResourceAction InvestigatorId
@@ -108,6 +126,11 @@ data Message = Setup
     | EmptyDeck InvestigatorId
     | DrawCards InvestigatorId Int
     | PayCardCost InvestigatorId CardCode Int
+    | AddAct ActId
+    | AddAgenda AgendaId
+    | AllRandomDiscard
+    | NextAgenda AgendaId AgendaId
+    | NextAct ActId ActId
     deriving stock (Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
