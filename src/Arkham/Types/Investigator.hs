@@ -207,7 +207,12 @@ baseAttrs iid name Stats {..} traits = Attrs
   , investigatorAssets = mempty
   , investigatorDeck = mempty
   , investigatorDiscard = mempty
-  , investigatorHand = mempty
+  -- , investigatorHand = mempty
+  , investigatorHand =
+    [ PlayerCard $ lookupCard "01088"
+    , PlayerCard $ lookupCard "01021"
+    , PlayerCard $ lookupCard "01020"
+    ]
   , investigatorConnectedLocations = mempty
   , investigatorTraits = HashSet.fromList traits
   , investigatorTreacheries = mempty
