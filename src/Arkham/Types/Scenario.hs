@@ -98,7 +98,6 @@ instance (ScenarioRunner env) => RunMessage env TheGatheringI where
         , PlaceLocation "01111"
         , RevealLocation "01111"
         , MoveAllTo "01111"
-        , InvestigatorPlayCard "01001" "01021" 0
         ]
       TheGatheringI <$> runMessage msg attrs
     ResolveToken Token.Skull iid skillValue ->

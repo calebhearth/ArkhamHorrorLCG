@@ -111,33 +111,40 @@ instance (TreacheryRunner env) => RunMessage env Treachery where
 
 instance (TreacheryRunner env) => RunMessage env GraspingHandsI where
   runMessage msg t@(GraspingHandsI attrs@Attrs {..}) = case msg of
-    RunTreachery iid tid | tid == treacheryId -> t <$ unshiftMessage
-      (RevelationSkillCheck iid SkillAgility 3 [] [DamagePerPointOfFailure iid])
+    RunTreachery iid tid | tid == treacheryId -> t <$ unshiftMessages
+      [ RevelationSkillCheck iid SkillAgility 3 [] [DamagePerPointOfFailure iid]
+      , DiscardTreachery tid
+      ]
     _ -> GraspingHandsI <$> runMessage msg attrs
 
 instance (TreacheryRunner env) => RunMessage env AncientEvilsI where
   runMessage msg t@(AncientEvilsI attrs@Attrs {..}) = case msg of
-    RunTreachery _ tid | tid == treacheryId ->
-      t <$ unshiftMessages
-        [PlaceDoomOnAgenda, AdvanceAgendaIfThresholdSatisfied]
+    RunTreachery _ tid | tid == treacheryId -> t <$ unshiftMessages
+      [ PlaceDoomOnAgenda
+      , AdvanceAgendaIfThresholdSatisfied
+      , DiscardTreachery tid
+      ]
     _ -> AncientEvilsI <$> runMessage msg attrs
 
 instance (TreacheryRunner env) => RunMessage env RottingRemainsI where
   runMessage msg t@(RottingRemainsI attrs@Attrs {..}) = case msg of
-    RunTreachery iid tid | tid == treacheryId -> t <$ unshiftMessage
-      (RevelationSkillCheck
+    RunTreachery iid tid | tid == treacheryId -> t <$ unshiftMessages
+      [ RevelationSkillCheck
         iid
         SkillWillpower
         3
         []
         [HorrorPerPointOfFailure iid]
-      )
+      , DiscardTreachery tid
+      ]
     _ -> RottingRemainsI <$> runMessage msg attrs
 
 instance (TreacheryRunner env) => RunMessage env CryptChillI where
   runMessage msg t@(CryptChillI attrs@Attrs {..}) = case msg of
-    RunTreachery iid tid | tid == treacheryId -> t <$ unshiftMessage
-      (RevelationSkillCheck iid SkillWillpower 4 [] [TreacheryFailure iid tid])
+    RunTreachery iid tid | tid == treacheryId -> t <$ unshiftMessages
+      [ RevelationSkillCheck iid SkillWillpower 4 [] [TreacheryFailure iid tid]
+      , DiscardTreachery tid
+      ]
     TreacheryFailure iid tid | tid == treacheryId -> do
       assetCount <- HashSet.size <$> asks (getSet @AssetId iid)
       if assetCount > 0

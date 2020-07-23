@@ -187,15 +187,9 @@ baseAttrs iid name health sanity willpower intellect combat agility traits =
     , investigatorEndedTurn = False
     , investigatorEngagedEnemies = mempty
     , investigatorAssets = mempty
-    , investigatorDeck = map lookupCard ["01020", "01020", "01021", "01021"]
-  -- , investigatorDeck = mempty
+    , investigatorDeck = mempty
     , investigatorDiscard = mempty
-    , investigatorHand =
-      [ PlayerCard $ lookupCard "01088"
-      , PlayerCard $ lookupCard "01021"
-      , PlayerCard $ lookupCard "01020"
-      ]
-  -- , investigatorHand = mempty
+    , investigatorHand = mempty
     , investigatorConnectedLocations = mempty
     , investigatorTraits = HashSet.fromList traits
     }

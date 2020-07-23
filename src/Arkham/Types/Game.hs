@@ -491,8 +491,7 @@ runGameMessage msg g = case msg of
           & (encounterDeck .~ encounterDeck')
       TreacheryType -> do
         (treacheryId', treachery') <- createTreachery (ecCardCode card)
-        unshiftMessages
-          [RunTreachery iid treacheryId', DiscardTreachery treacheryId']
+        unshiftMessage (RunTreachery iid treacheryId')
         pure
           $ g
           & (treacheries . at treacheryId' ?~ treachery')
