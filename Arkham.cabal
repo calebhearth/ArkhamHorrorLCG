@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5c259353c87b47560bb558cb411fe5f00108417801b58b99d34820a4dbf818e7
+-- hash: d5ac6715d68fae29e6308f0c30665a22c1bf28b833c3c01ff279a2980ac84e0a
 
 name:           Arkham
 version:        0.1.0.0
@@ -56,6 +56,8 @@ library
       Arkham.Types.SkillType
       Arkham.Types.Token
       Arkham.Types.Trait
+      Arkham.Types.Treachery
+      Arkham.Types.TreacheryId
   other-modules:
       Paths_Arkham
   hs-source-dirs:

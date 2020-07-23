@@ -10,6 +10,7 @@ module Arkham.Types.Card
   , HasCost(..)
   , allCards
   , allPlayerCards
+  , allEncounterCards
   )
 where
 
@@ -68,6 +69,7 @@ instance HasCost Card where
 
 data PlayerCard = MkPlayerCard
   { pcCardCode   :: CardCode
+  , pcName :: Text
   , pcCost       :: Int
   , pcLevel      :: Int
   , pcCardType   :: PlayerCardType
@@ -85,8 +87,9 @@ instance HasCost PlayerCard where
   getCost = pcCost
 
 data EncounterCard = MkEncounterCard
-  { ecCardType :: EncounterCardType
-  , ecCardCode :: CardCode
+  { ecCardCode :: CardCode
+  , ecName :: Text
+  , ecCardType :: EncounterCardType
   , ecTraits   :: [Trait]
   }
   deriving stock (Show, Generic)
@@ -96,19 +99,100 @@ instance HasCardCode EncounterCard where
   getCardCode = ecCardCode
 
 allCards :: HashMap CardCode Card
-allCards = HashMap.map PlayerCard allPlayerCards
+allCards =
+  HashMap.map PlayerCard allPlayerCards
+    <> HashMap.map EncounterCard allEncounterCards
 
 allPlayerCards :: HashMap CardCode PlayerCard
 allPlayerCards = HashMap.fromList $ map
   (\c -> (getCardCode c, c))
   [ MkPlayerCard
-    "01020"
-    3
-    0
-    AssetType
-    Guardian
-    [SkillCombat]
-    [Item, Weapon, Melee]
-  , MkPlayerCard "01021" 3 0 AssetType Guardian [SkillCombat] [Ally, Creature]
-  , MkPlayerCard "01088" 0 0 EventType Neutral [] [Supply]
+    { pcCardCode = "01020"
+    , pcName = "Machete"
+    , pcCost = 3
+    , pcLevel = 0
+    , pcCardType = AssetType
+    , pcClassSybol = Guardian
+    , pcSkills = [SkillCombat]
+    , pcTraits = [Item, Weapon, Melee]
+    }
+  , MkPlayerCard
+    { pcCardCode = "01021"
+    , pcName = "Guard Dog"
+    , pcCost = 3
+    , pcLevel = 0
+    , pcCardType = AssetType
+    , pcClassSybol = Guardian
+    , pcSkills = [SkillCombat]
+    , pcTraits = [Ally, Creature]
+    }
+  , MkPlayerCard
+    { pcCardCode = "01088"
+    , pcName = "Emergency Cache"
+    , pcCost = 0
+    , pcLevel = 0
+    , pcCardType = EventType
+    , pcClassSybol = Neutral
+    , pcSkills = []
+    , pcTraits = [Supply]
+    }
+  ]
+
+allEncounterCards :: HashMap CardCode EncounterCard
+allEncounterCards = HashMap.fromList $ map
+  (\c -> (getCardCode c, c))
+  [ MkEncounterCard
+    { ecCardCode = "01159"
+    , ecName = "Swarm of Rats"
+    , ecCardType = EnemyType
+    , ecTraits = [Creature]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01160"
+    , ecName = "Ghoul Minion"
+    , ecCardType = EnemyType
+    , ecTraits = [Humanoid, Monster, Ghoul]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01161"
+    , ecName = "Ravenous Ghoul"
+    , ecCardType = EnemyType
+    , ecTraits = [Humanoid, Monster, Ghoul]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01162"
+    , ecName = "Grasping Hands"
+    , ecCardType = TreacheryType
+    , ecTraits = [Hazard]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01163"
+    , ecName = "Rotting Remains"
+    , ecCardType = TreacheryType
+    , ecTraits = [Terror]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01164"
+    , ecName = "Frozen in Fear"
+    , ecCardType = TreacheryType
+    , ecTraits = [Terror]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01165"
+    , ecName = "Dissonant Voices"
+    , ecCardType = TreacheryType
+    , ecTraits = [Terror]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01166"
+    , ecName = "Ancient Evils"
+    , ecCardType = TreacheryType
+    , ecTraits = [Omen]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01167"
+    , ecName = "Crypt Chill"
+    , ecCardType = TreacheryType
+    , ecTraits = [Hazard]
+    }
   ]

@@ -37,6 +37,8 @@ import Arkham.Types.SkillCheck
 import Arkham.Types.Token (Token)
 import qualified Arkham.Types.Token as Token
 import Arkham.Types.Trait
+import Arkham.Types.Treachery
+import Arkham.Types.TreacheryId
 import ClassyPrelude
 import Control.Monad.State
 import qualified Data.HashMap.Strict as HashMap
@@ -53,21 +55,23 @@ import Text.Pretty.Simple
 import Text.Read hiding (get)
 
 data Game = Game
-  { giMessages             :: IORef [Message]
-  , giSeed                 :: Int
-  , giScenario             :: Scenario
-  , giLocations            :: HashMap LocationId Location
-  , giInvestigators        :: HashMap InvestigatorId Investigator
-  , giEnemies              :: HashMap EnemyId Enemy
-  , giAssets               :: HashMap AssetId Asset
+  { giMessages :: IORef [Message]
+  , giSeed :: Int
+  , giScenario :: Scenario
+  , giLocations :: HashMap LocationId Location
+  , giInvestigators :: HashMap InvestigatorId Investigator
+  , giEnemies :: HashMap EnemyId Enemy
+  , giAssets :: HashMap AssetId Asset
   , giActiveInvestigatorId :: InvestigatorId
-  , giLeadInvestigatorId   :: InvestigatorId
-  , giPhase                :: Phase
-  , giDiscard              :: [CardCode]
-  , giChaosBag             :: [Token]
-  , giSkillCheck           :: Maybe SkillCheck
-  , giActs                 :: HashMap ActId Act
-  , giAgendas              :: HashMap AgendaId Agenda
+  , giLeadInvestigatorId :: InvestigatorId
+  , giPhase :: Phase
+  , giEncounterDeck :: [EncounterCard]
+  , giDiscard :: [EncounterCard]
+  , giChaosBag :: [Token]
+  , giSkillCheck :: Maybe SkillCheck
+  , giActs :: HashMap ActId Act
+  , giAgendas :: HashMap AgendaId Agenda
+  , giTreacheries :: HashMap TreacheryId Treachery
   }
 
 phase :: Lens' Game Phase
@@ -78,6 +82,9 @@ acts = lens giActs $ \m x -> m { giActs = x }
 
 agendas :: Lens' Game (HashMap AgendaId Agenda)
 agendas = lens giAgendas $ \m x -> m { giAgendas = x }
+
+treacheries :: Lens' Game (HashMap TreacheryId Treachery)
+treacheries = lens giTreacheries $ \m x -> m { giTreacheries = x }
 
 locations :: Lens' Game (HashMap LocationId Location)
 locations = lens giLocations $ \m x -> m { giLocations = x }
@@ -91,7 +98,10 @@ enemies = lens giEnemies $ \m x -> m { giEnemies = x }
 assets :: Lens' Game (HashMap AssetId Asset)
 assets = lens giAssets $ \m x -> m { giAssets = x }
 
-discard :: Lens' Game [CardCode]
+encounterDeck :: Lens' Game [EncounterCard]
+encounterDeck = lens giEncounterDeck $ \m x -> m { giEncounterDeck = x }
+
+discard :: Lens' Game [EncounterCard]
 discard = lens giDiscard $ \m x -> m { giDiscard = x }
 
 chaosBag :: Lens' Game [Token]
@@ -136,9 +146,11 @@ newGame scenarioId investigatorsList = do
     , giActiveInvestigatorId = initialInvestigatorId
     , giLeadInvestigatorId = initialInvestigatorId
     , giPhase = InvestigationPhase
+    , giEncounterDeck = mempty
     , giDiscard = mempty
     , giSkillCheck = Nothing
     , giAgendas = mempty
+    , giTreacheries = mempty
     , giActs = mempty
     , giChaosBag =
       [ Token.PlusOne
@@ -256,23 +268,6 @@ instance HasSet ClosestLocationId (LocationId, Prey) Game where
     HashSet.fromList . map ClosestLocationId $ getShortestPath g start matcher
     where matcher lid = not . null $ getSet @PreyId (prey, lid) g
 
-instance HasSet AdvanceableActId () Game where
-  getSet _ g = HashSet.map AdvanceableActId . HashMap.keysSet $ acts'
-    where acts' = HashMap.filter isAdvanceable (g ^. acts)
-
-instance HasSet ConnectedLocationId LocationId Game where
-  getSet lid g = getSet () location
-    where location = fromJustNote "No location" $ g ^? locations . ix lid
-
-instance HasSet DamageableAssetId InvestigatorId Game where
-  getSet iid g = HashSet.map DamageableAssetId . HashMap.keysSet $ assets'
-   where
-    investigator = fromJustNote "No investigator" $ g ^? investigators . ix iid
-    assetIds = getSet () investigator
-    assets' = HashMap.filterWithKey
-      (\k v -> k `elem` assetIds && isDamageable v)
-      (g ^. assets)
-
 instance HasSet PreyId (Prey, LocationId) Game where
   getSet (preyType, lid) g = HashSet.map PreyId
     $ HashSet.filter matcher investigators'
@@ -283,6 +278,27 @@ instance HasSet PreyId (Prey, LocationId) Game where
       isPrey preyType
         . fromJustNote "No investigator"
         $ (g ^? investigators . ix iid)
+
+
+instance HasSet AdvanceableActId () Game where
+  getSet _ g = HashSet.map AdvanceableActId . HashMap.keysSet $ acts'
+    where acts' = HashMap.filter isAdvanceable (g ^. acts)
+
+instance HasSet ConnectedLocationId LocationId Game where
+  getSet lid g = getSet () location
+    where location = fromJustNote "No location" $ g ^? locations . ix lid
+
+instance HasSet AssetId InvestigatorId Game where
+  getSet iid g =
+    getSet () $ fromJustNote "No investigator" $ g ^? investigators . ix iid
+
+instance HasSet DamageableAssetId InvestigatorId Game where
+  getSet iid g = HashSet.map DamageableAssetId . HashMap.keysSet $ assets'
+   where
+    assetIds = getSet iid g
+    assets' = HashMap.filterWithKey
+      (\k v -> k `elem` assetIds && isDamageable v)
+      (g ^. assets)
 
 instance HasSet EnemyId LocationId Game where
   getSet lid g = getSet () location
@@ -295,6 +311,11 @@ createEnemy :: MonadIO m => CardCode -> m (EnemyId, Enemy)
 createEnemy cardCode = do
   eid <- liftIO $ EnemyId <$> nextRandom
   pure (eid, lookupEnemy cardCode eid)
+
+createTreachery :: MonadIO m => CardCode -> m (TreacheryId, Treachery)
+createTreachery cardCode = do
+  tid <- liftIO $ TreacheryId <$> nextRandom
+  pure (tid, lookupTreachery cardCode tid)
 
 locationFor :: InvestigatorId -> Game -> LocationId
 locationFor iid g = locationOf investigator
@@ -314,6 +335,7 @@ runGameMessage msg g = case msg of
   PlaceLocation lid -> do
     unshiftMessage (PlacedLocation lid)
     pure $ g & locations . at lid ?~ lookupLocation lid
+  SetEncounterDeck encounterDeck' -> pure $ g & encounterDeck .~ encounterDeck'
   RemoveLocation lid -> pure $ g & locations %~ HashMap.delete lid
   NextAgenda aid1 aid2 ->
     pure $ g & agendas %~ HashMap.delete aid1 & agendas %~ HashMap.insert
@@ -380,17 +402,23 @@ runGameMessage msg g = case msg of
         unshiftMessage (EnemyAttacks (EnemyAttack iid2 eid2 : as))
       _ -> unshiftMessage (Ask . ChooseOneAtATime $ map ChoiceResult as)
     pure g
+  DiscardAsset aid -> do
+    let asset = g ^?! assets . ix aid
+    unshiftMessage (AssetDiscarded aid (getCardCode asset))
+    pure $ g & assets %~ HashMap.delete aid
   AssetDefeated aid -> do
     let asset = g ^?! assets . ix aid
     unshiftMessage (AssetDiscarded aid (getCardCode asset))
     pure $ g & assets %~ HashMap.delete aid
   EnemyDefeated eid _ ->
-    let enemy = g ^?! enemies . ix eid
-    in
-      pure
+    let
+      enemy = g ^?! enemies . ix eid
+      encounterCard = fromJustNote "missing"
+        $ HashMap.lookup (getCardCode enemy) allEncounterCards
+    in pure
       $ g
       & (enemies %~ HashMap.delete eid)
-      & (discard %~ (getCardCode enemy :))
+      & (discard %~ (encounterCard :))
   BeginInvestigation -> pure $ g & phase .~ InvestigationPhase
   EndInvestigation -> g <$ pushMessage BeginEnemy
   BeginEnemy -> do
@@ -411,14 +439,23 @@ runGameMessage msg g = case msg of
     , EndMythos
     ]
   EndMythos -> g <$ pushMessage BeginInvestigation
-  BeginSkillCheck iid _ difficulty skillValue onSuccess onFailure -> do
+  BeginSkillCheck iid skillType difficulty skillValue onSuccess onFailure -> do
     (token, chaosBag') <- drawToken g
     unshiftMessage (ResolveToken token iid skillValue)
     unshiftMessage (DrawToken token)
     pure
       $ g
       & (skillCheck
-        ?~ SkillCheck iid difficulty onSuccess onFailure DrawOne ResolveAll []
+        ?~ SkillCheck
+             iid
+             skillType
+             difficulty
+             onSuccess
+             onFailure
+             DrawOne
+             ResolveAll
+             []
+             Unrun
         )
       & (chaosBag .~ chaosBag')
   DrawAnotherToken iid skillValue _ -> do
@@ -441,11 +478,32 @@ runGameMessage msg g = case msg of
     (enemyId', enemy') <- createEnemy cardCode
     unshiftMessage (EnemySpawn lid enemyId')
     pure $ g & enemies . at enemyId' ?~ enemy'
-  InvestigatorDrawEncounterCard iid cardCode -> do
-    (enemyId', enemy') <- createEnemy cardCode
-    let lid = locationFor iid g
-    unshiftMessage (InvestigatorDrawEnemy iid lid enemyId')
-    pure $ g & enemies . at enemyId' ?~ enemy'
+  InvestigatorDrawEncounterCard iid -> do
+    let (card : encounterDeck') = g ^. encounterDeck
+    case ecCardType card of
+      EnemyType -> do
+        (enemyId', enemy') <- createEnemy (ecCardCode card)
+        let lid = locationFor iid g
+        unshiftMessage (InvestigatorDrawEnemy iid lid enemyId')
+        pure
+          $ g
+          & (enemies . at enemyId' ?~ enemy')
+          & (encounterDeck .~ encounterDeck')
+      TreacheryType -> do
+        (treacheryId', treachery') <- createTreachery (ecCardCode card)
+        unshiftMessages
+          [RunTreachery iid treacheryId', DiscardTreachery treacheryId']
+        pure
+          $ g
+          & (treacheries . at treacheryId' ?~ treachery')
+          & (encounterDeck .~ encounterDeck')
+      LocationType -> pure g
+  DiscardTreachery tid ->
+    let
+      treachery = fromJustNote "missing treachery" $ g ^? treacheries . ix tid
+      card = fromJustNote "missing card"
+        $ HashMap.lookup (getCardCode treachery) allEncounterCards
+    in pure $ g & treacheries %~ HashMap.delete tid & discard %~ (card :)
   _ -> pure g
 
 instance RunMessage Game Game where
@@ -453,6 +511,7 @@ instance RunMessage Game Game where
     traverseOf scenario (runMessage msg) g
       >>= traverseOf (acts . traverse) (runMessage msg)
       >>= traverseOf (agendas . traverse) (runMessage msg)
+      >>= traverseOf (treacheries . traverse) (runMessage msg)
       >>= traverseOf (locations . traverse) (runMessage msg)
       >>= traverseOf (enemies . traverse) (runMessage msg)
       >>= traverseOf (assets . traverse) (runMessage msg)
@@ -474,11 +533,13 @@ toExternalGame Game {..} = do
     , gActiveInvestigatorId = giActiveInvestigatorId
     , gLeadInvestigatorId = giLeadInvestigatorId
     , gPhase = giPhase
+    , gEncounterDeck = giEncounterDeck
     , gDiscard = giDiscard
     , gSkillCheck = giSkillCheck
     , gChaosBag = giChaosBag
     , gActs = giActs
     , gAgendas = giAgendas
+    , gTreacheries = giTreacheries
     }
 
 toInternalGame' :: IORef [Message] -> GameJson -> Game
@@ -493,10 +554,12 @@ toInternalGame' ref GameJson {..} = Game
   , giActiveInvestigatorId = gActiveInvestigatorId
   , giLeadInvestigatorId = gLeadInvestigatorId
   , giPhase = gPhase
+  , giEncounterDeck = gEncounterDeck
   , giDiscard = gDiscard
   , giSkillCheck = gSkillCheck
   , giChaosBag = gChaosBag
   , giAgendas = gAgendas
+  , giTreacheries = gTreacheries
   , giActs = gActs
   }
 

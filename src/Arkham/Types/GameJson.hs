@@ -18,25 +18,29 @@ import Arkham.Types.Phase
 import Arkham.Types.Scenario
 import Arkham.Types.SkillCheck
 import Arkham.Types.Token
+import Arkham.Types.Treachery
+import Arkham.Types.TreacheryId
 import ClassyPrelude
 import Data.Aeson
 
 data GameJson = GameJson
-  { gMessages             :: [Message]
-  , gSeed                 :: Int
-  , gScenario             :: Scenario
-  , gLocations            :: HashMap LocationId Location
-  , gInvestigators        :: HashMap InvestigatorId Investigator
-  , gEnemies              :: HashMap EnemyId Enemy
-  , gAssets               :: HashMap AssetId Asset
+  { gMessages :: [Message]
+  , gSeed :: Int
+  , gScenario :: Scenario
+  , gLocations :: HashMap LocationId Location
+  , gInvestigators :: HashMap InvestigatorId Investigator
+  , gEnemies :: HashMap EnemyId Enemy
+  , gAssets :: HashMap AssetId Asset
   , gActiveInvestigatorId :: InvestigatorId
-  , gLeadInvestigatorId   :: InvestigatorId
-  , gPhase                :: Phase
-  , gDiscard              :: [CardCode]
-  , gSkillCheck           :: Maybe SkillCheck
-  , gChaosBag             :: [Token]
-  , gAgendas              :: HashMap AgendaId Agenda
-  , gActs                 :: HashMap ActId Act
+  , gLeadInvestigatorId :: InvestigatorId
+  , gPhase :: Phase
+  , gEncounterDeck :: [EncounterCard]
+  , gDiscard :: [EncounterCard]
+  , gSkillCheck :: Maybe SkillCheck
+  , gChaosBag :: [Token]
+  , gAgendas :: HashMap AgendaId Agenda
+  , gTreacheries :: HashMap TreacheryId Treachery
+  , gActs :: HashMap ActId Act
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)

@@ -126,13 +126,21 @@ sanityDamage =
   lens investigatorSanityDamage $ \m x -> m { investigatorSanityDamage = x }
 
 discard :: Lens' Attrs [PlayerCard]
-discard = lens investigatorDeck $ \m x -> m { investigatorDiscard = x }
+discard = lens investigatorDiscard $ \m x -> m { investigatorDiscard = x }
 
 hand :: Lens' Attrs [Card]
 hand = lens investigatorHand $ \m x -> m { investigatorHand = x }
 
 deck :: Lens' Attrs [PlayerCard]
 deck = lens investigatorDeck $ \m x -> m { investigatorDeck = x }
+
+skillValueFor :: SkillType -> Attrs -> Int
+skillValueFor skill attrs = case skill of
+  SkillWillpower -> investigatorWillpower attrs
+  SkillIntellect -> investigatorIntellect attrs
+  SkillCombat -> investigatorCombat attrs
+  SkillAgility -> investigatorAgility attrs
+  SkillWild -> error "investigators do not have wild skills"
 
 drawCard :: [PlayerCard] -> (Maybe PlayerCard, [PlayerCard])
 drawCard [] = (Nothing, [])
@@ -280,6 +288,11 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
     EnemyEngageInvestigator eid iid | iid == investigatorId ->
       pure $ a & engagedEnemies %~ HashSet.insert eid
     EnemyDefeated eid _ -> pure $ a & engagedEnemies %~ HashSet.delete eid
+    ChooseAndDiscardAsset iid | iid == investigatorId -> a <$ unshiftMessage
+      (Ask $ ChooseOne $ map
+        (ChoiceResult . DiscardAsset)
+        (HashSet.toList $ a ^. assets)
+      )
     AssetDiscarded aid cardCode | aid `elem` investigatorAssets ->
       pure
         $ a
@@ -366,6 +379,18 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
     EmptyDeck iid | iid == investigatorId -> do
       deck' <- liftIO $ shuffleM investigatorDiscard
       pure $ a & discard .~ [] & deck .~ deck'
+    AllDrawEncounterCard ->
+      a <$ unshiftMessage (InvestigatorDrawEncounterCard investigatorId)
+    RevelationSkillCheck iid skillType difficulty onSuccess onFailure ->
+      a <$ unshiftMessage
+        (BeginSkillCheck
+          iid
+          skillType
+          difficulty
+          (skillValueFor skillType a)
+          onSuccess
+          onFailure
+        )
     AllDrawCardAndResource -> do
       let
         (mcard, deck') = drawCard investigatorDeck

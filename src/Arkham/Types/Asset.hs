@@ -82,21 +82,26 @@ isDamageable a =
   (isJust . assetHealth . assetAttrs $ a)
     || (isJust . assetHealth . assetAttrs $ a)
 
-baseAttrs :: AssetId -> CardCode -> Int -> Text -> HashSet Trait -> Attrs
-baseAttrs eid cardCode cost name traits = Attrs
-  { assetName = name
-  , assetId = eid
-  , assetCardCode = cardCode
-  , assetCost = cost
-  , assetOwner = Unowned
-  , assetActions = mempty
-  , assetSlots = mempty
-  , assetHealth = Nothing
-  , assetSanity = Nothing
-  , assetHealthDamage = 0
-  , assetSanityDamage = 0
-  , assetTraits = traits
-  }
+baseAttrs :: AssetId -> CardCode -> Attrs
+baseAttrs eid cardCode =
+  let
+    MkPlayerCard {..} = fromJustNote "missing player card"
+      $ HashMap.lookup cardCode allPlayerCards
+  in
+    Attrs
+      { assetName = pcName
+      , assetId = eid
+      , assetCardCode = cardCode
+      , assetCost = pcCost
+      , assetOwner = Unowned
+      , assetActions = mempty
+      , assetSlots = mempty
+      , assetHealth = Nothing
+      , assetSanity = Nothing
+      , assetHealthDamage = 0
+      , assetSanityDamage = 0
+      , assetTraits = HashSet.fromList pcTraits
+      }
 
 owner :: Lens' Attrs AssetOwner
 owner = lens assetOwner $ \m x -> m { assetOwner = x }
@@ -111,22 +116,18 @@ newtype MacheteI = MacheteI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 machete :: AssetId -> Asset
-machete uuid = Machete $ MacheteI $ (baseAttrs uuid "01020" 3 "Machete" traits)
-  { assetSlots = [HandSlot]
-  }
-  where traits = HashSet.fromList [Item, Weapon, Melee]
+machete uuid =
+  Machete $ MacheteI $ (baseAttrs uuid "01020") { assetSlots = [HandSlot] }
 
 newtype GuardDogI = GuardDogI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 guardDog :: AssetId -> Asset
-guardDog uuid =
-  GuardDog $ GuardDogI $ (baseAttrs uuid "01021" 3 "Guard Dog" traits)
-    { assetSlots = [AllySlot]
-    , assetHealth = Just 3
-    , assetSanity = Just 1
-    }
-  where traits = HashSet.fromList [Ally, Creature]
+guardDog uuid = GuardDog $ GuardDogI $ (baseAttrs uuid "01021")
+  { assetSlots = [AllySlot]
+  , assetHealth = Just 3
+  , assetSanity = Just 1
+  }
 
 type AssetRunner env = (HasQueue env)
 

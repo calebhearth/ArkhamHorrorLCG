@@ -23,6 +23,7 @@ import Arkham.Types.LocationSymbol
 import Arkham.Types.SkillType
 import Arkham.Types.Token
 import Arkham.Types.Trait
+import Arkham.Types.TreacheryId
 import ClassyPrelude
 import Data.Aeson
 
@@ -50,6 +51,8 @@ data Source
   | TokenSource Token
   | AgendaSource AgendaId
   | LocationSource LocationId
+  | SkillCheckSource
+  | TreacherySource TreacheryId
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -107,7 +110,7 @@ data Message
   | EnemyWillAttack InvestigatorId EnemyId
   | EnemyAttacks [Message]
   | EnemyAttack InvestigatorId EnemyId
-  | InvestigatorDrawEncounterCard InvestigatorId CardCode
+  | InvestigatorDrawEncounterCard InvestigatorId
   | InvestigatorDrawEnemy InvestigatorId LocationId EnemyId
   | EnemySpawn LocationId EnemyId
   | EnemyEngageInvestigator EnemyId InvestigatorId
@@ -117,6 +120,7 @@ data Message
   | InvestigatorAssignDamage InvestigatorId EnemyId Int Int
   | AssetDamage AssetId EnemyId Int Int
   | AssetDefeated AssetId
+  | DiscardAsset AssetId
   | AssetDiscarded AssetId CardCode
   | InvestigatorDamage InvestigatorId Source Int Int
   | InvestigatorPlayAsset InvestigatorId AssetId
@@ -145,6 +149,14 @@ data Message
   | AfterEnterLocation InvestigatorId LocationId
   | EnemyMove EnemyId LocationId LocationId
   | CreateEnemyAt CardCode LocationId
+  | RunTreachery InvestigatorId TreacheryId
+  | RevelationSkillCheck InvestigatorId SkillType Int [Message] [Message]
+  | DamagePerPointOfFailure InvestigatorId
+  | HorrorPerPointOfFailure InvestigatorId
+  | DiscardTreachery TreacheryId
+  | SetEncounterDeck [EncounterCard]
+  | TreacheryFailure InvestigatorId TreacheryId -- TODO: better name
+  | ChooseAndDiscardAsset InvestigatorId
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 

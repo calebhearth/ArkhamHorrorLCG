@@ -90,84 +90,78 @@ enemyAttrs = \case
   SwarmOfRats attrs -> coerce attrs
   GhoulMinion attrs -> coerce attrs
 
-baseAttrs :: EnemyId -> CardCode -> Text -> [Trait] -> Attrs
-baseAttrs eid cardCode name traits = Attrs
-  { enemyName = name
-  , enemyId = eid
-  , enemyCardCode = cardCode
-  , enemyEngagedInvestigators = mempty
-  , enemyLocation = "00000" -- no known location
-  , enemyFight = 1
-  , enemyHealth = Static 1
-  , enemyEvade = 1
-  , enemyDamage = 0
-  , enemyHealthDamage = 0
-  , enemySanityDamage = 0
-  , enemyTraits = HashSet.fromList traits
-  , enemyVictory = Nothing
-  , enemyIsHunter = False
-  }
+baseAttrs :: EnemyId -> CardCode -> Attrs
+baseAttrs eid cardCode =
+  let
+    MkEncounterCard {..} =
+      fromJustNote "missing encounter card"
+        $ HashMap.lookup cardCode allEncounterCards
+  in
+    Attrs
+      { enemyName = ecName
+      , enemyId = eid
+      , enemyCardCode = cardCode
+      , enemyEngagedInvestigators = mempty
+      , enemyLocation = "00000" -- no known location
+      , enemyFight = 1
+      , enemyHealth = Static 1
+      , enemyEvade = 1
+      , enemyDamage = 0
+      , enemyHealthDamage = 0
+      , enemySanityDamage = 0
+      , enemyTraits = HashSet.fromList ecTraits
+      , enemyVictory = Nothing
+      , enemyIsHunter = False
+      }
 
 newtype FleshEaterI = FleshEaterI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 fleshEater :: EnemyId -> Enemy
-fleshEater uuid =
-  FleshEater
-    $ FleshEaterI
-    $ (baseAttrs uuid "01118" "Flesh-Easter" [Humanoid, Monster, Ghoul])
-        { enemyHealthDamage = 1
-        , enemySanityDamage = 2
-        , enemyFight = 4
-        , enemyHealth = Static 4
-        , enemyEvade = 1
-        , enemyVictory = Just 1
-        }
+fleshEater uuid = FleshEater $ FleshEaterI $ (baseAttrs uuid "01118")
+  { enemyHealthDamage = 1
+  , enemySanityDamage = 2
+  , enemyFight = 4
+  , enemyHealth = Static 4
+  , enemyEvade = 1
+  , enemyVictory = Just 1
+  }
 
 newtype IcyGhoulI = IcyGhoulI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 icyGhoul :: EnemyId -> Enemy
-icyGhoul uuid =
-  IcyGhoul
-    $ IcyGhoulI
-    $ (baseAttrs uuid "01119" "Icy Ghoul" [Humanoid, Monster, Ghoul])
-        { enemyHealthDamage = 2
-        , enemySanityDamage = 1
-        , enemyFight = 3
-        , enemyHealth = Static 4
-        , enemyEvade = 4
-        , enemyVictory = Just 1
-        }
+icyGhoul uuid = IcyGhoul $ IcyGhoulI $ (baseAttrs uuid "01119")
+  { enemyHealthDamage = 2
+  , enemySanityDamage = 1
+  , enemyFight = 3
+  , enemyHealth = Static 4
+  , enemyEvade = 4
+  , enemyVictory = Just 1
+  }
 
 
 newtype SwarmOfRatsI = SwarmOfRatsI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 swarmOfRats :: EnemyId -> Enemy
-swarmOfRats uuid =
-  SwarmOfRats
-    $ SwarmOfRatsI
-    $ (baseAttrs uuid "01159" "Swarm of Rats" [Creature])
-        { enemyHealthDamage = 1
-        , enemyEvade = 3
-        , enemyIsHunter = True
-        }
+swarmOfRats uuid = SwarmOfRats $ SwarmOfRatsI $ (baseAttrs uuid "01159")
+  { enemyHealthDamage = 1
+  , enemyEvade = 3
+  , enemyIsHunter = True
+  }
 
 newtype GhoulMinionI = GhoulMinionI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
 ghoulMinion :: EnemyId -> Enemy
-ghoulMinion uuid =
-  GhoulMinion
-    $ GhoulMinionI
-    $ (baseAttrs uuid "01160" "Ghoul Minion" [Humanoid, Monster, Ghoul])
-        { enemyHealthDamage = 1
-        , enemySanityDamage = 1
-        , enemyFight = 2
-        , enemyHealth = Static 2
-        , enemyEvade = 2
-        }
+ghoulMinion uuid = GhoulMinion $ GhoulMinionI $ (baseAttrs uuid "01160")
+  { enemyHealthDamage = 1
+  , enemySanityDamage = 1
+  , enemyFight = 2
+  , enemyHealth = Static 2
+  , enemyEvade = 2
+  }
 
 type EnemyRunner env
   = ( HasSet LocationId () env

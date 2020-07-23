@@ -56,6 +56,7 @@ data Trait
   | Geist
   | Ghoul
   | Grant
+  | Hazard
   | Humanoid
   | Hunter
   | Illicit
@@ -103,6 +104,7 @@ data Trait
   | Talent
   | Tarot
   | Task
+  | Terror
   | Tindalos
   | Tome
   | Tool

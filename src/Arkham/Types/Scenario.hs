@@ -87,15 +87,20 @@ instance (ScenarioRunner env) => RunMessage env Scenario where
     TheMidnightMasks x -> TheMidnightMasks <$> runMessage msg x
 
 instance (ScenarioRunner env) => RunMessage env TheGatheringI where
-  runMessage msg s@(TheGatheringI Attrs {..}) = case msg of
-    Setup -> s <$ pushMessages
-      [ AddAgenda "01105"
-      , AddAct "01108"
-      , PlaceLocation "01111"
-      , RevealLocation "01111"
-      , MoveAllTo "01111"
-      , BeginInvestigation
-      ]
+  runMessage msg s@(TheGatheringI attrs@Attrs {..}) = case msg of
+    Setup -> do
+      pushMessages
+        [ SetEncounterDeck $ map
+          (fromJustNote "missing card" . flip HashMap.lookup allEncounterCards)
+          ["01167", "01167"]
+        , AddAgenda "01105"
+        , AddAct "01108"
+        , PlaceLocation "01111"
+        , RevealLocation "01111"
+        , MoveAllTo "01111"
+        , InvestigatorPlayCard "01001" "01021" 0
+        ]
+      TheGatheringI <$> runMessage msg attrs
     ResolveToken Token.Skull iid skillValue ->
       if scenarioDifficulty `elem` [Easy, Standard]
         then do
@@ -136,4 +141,10 @@ instance (ScenarioRunner env) => RunMessage env TheGatheringI where
     _ -> pure s
 
 instance (ScenarioRunner env) => RunMessage env TheMidnightMasksI where
-  runMessage _ = pure
+  runMessage msg (TheMidnightMasksI attrs) =
+    TheMidnightMasksI <$> runMessage msg attrs
+
+instance (ScenarioRunner env) => RunMessage env Attrs where
+  runMessage msg a = case msg of
+    Setup -> a <$ pushMessage BeginInvestigation
+    _ -> pure a
