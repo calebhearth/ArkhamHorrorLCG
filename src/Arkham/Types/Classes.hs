@@ -4,6 +4,7 @@ module Arkham.Types.Classes where
 
 import Arkham.Types.LocationId
 import Arkham.Types.Message
+import Arkham.Types.Query
 import Arkham.Types.SkillType
 import Arkham.Types.Trait
 import ClassyPrelude

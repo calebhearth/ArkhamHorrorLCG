@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3a53d2db57e3dc2534c5a8f5225f9f85afe438354f9977f0abc7786abac094b5
+-- hash: fac6957ad31dc9922e42a7b8e78237a101dfc2d0a0bf3d070e1285e6fed8541e
 
 name:           Arkham
 version:        0.1.0.0
@@ -51,11 +51,15 @@ library
       Arkham.Types.LocationId
       Arkham.Types.LocationSymbol
       Arkham.Types.Message
+      Arkham.Types.Modifier
       Arkham.Types.Phase
+      Arkham.Types.Prey
+      Arkham.Types.Query
       Arkham.Types.Scenario
       Arkham.Types.ScenarioId
       Arkham.Types.SkillCheck
       Arkham.Types.SkillType
+      Arkham.Types.Source
       Arkham.Types.Token
       Arkham.Types.Trait
       Arkham.Types.Treachery

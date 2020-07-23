@@ -1,23 +1,10 @@
 module Arkham.Types.Message
   ( Message(..)
   , Question(..)
-  , Source(..)
-  , ClueCount(..)
-  , PlayerCount(..)
-  , EnemyCount(..)
-  , RemainingHealth(..)
-  , InvestigatorLocation(..)
-  , LeadInvestigatorId(..)
-  , AllInvestigators(..)
-  , Prey(..)
-  , Modifier(..)
-  , sourceOfModifier
-  , ActionTarget(..)
   )
 where
 
 import Arkham.Types.ActId
-import Arkham.Types.Action (Action)
 import Arkham.Types.AgendaId
 import Arkham.Types.AssetId
 import Arkham.Types.Card
@@ -25,45 +12,14 @@ import Arkham.Types.EnemyId
 import Arkham.Types.InvestigatorId
 import Arkham.Types.LocationId
 import Arkham.Types.LocationSymbol
+import Arkham.Types.Modifier
 import Arkham.Types.SkillType
+import Arkham.Types.Source
 import Arkham.Types.Token
 import Arkham.Types.Trait
 import Arkham.Types.TreacheryId
 import ClassyPrelude
 import Data.Aeson
-
-newtype EnemyCount = EnemyCount { unEnemyCount :: Int }
-newtype ClueCount = ClueCount { unClueCount :: Int }
-newtype RemainingHealth = RemainingHealth { unRemainingHealth :: Int }
-  deriving newtype (Eq, Hashable)
-
-instance Semigroup ClueCount where
-  (ClueCount a) <> (ClueCount b) = ClueCount (a + b)
-
-instance Monoid ClueCount where
-  mempty = ClueCount 0
-  mappend = (<>)
-
-newtype PlayerCount = PlayerCount { unPlayerCount :: Int }
-newtype LeadInvestigatorId = LeadInvestigatorId { unLeadInvestigatorId :: InvestigatorId }
-
-newtype InvestigatorLocation = InvestigatorLocation InvestigatorId
-data AllInvestigators = AllInvestigators
-data Prey = AnyPrey | HighestSkill SkillType | LowestHealth
-  deriving stock (Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
-
-data Source
-  = AssetSource AssetId
-  | EnemySource EnemyId
-  | InvestigatorSource InvestigatorId
-  | TokenSource Token
-  | AgendaSource AgendaId
-  | LocationSource LocationId
-  | SkillCheckSource
-  | TreacherySource TreacheryId
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (ToJSON, FromJSON)
 
 data Message
   = Setup
@@ -177,20 +133,6 @@ data Message
   | InvestigatorRemoveAllModifiersFromSource InvestigatorId Source
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
-
-sourceOfModifier :: Modifier -> Source
-sourceOfModifier (ActionCostOf _ _ s) = s
-
-data Modifier
-  = ActionCostOf ActionTarget Int Source
-  deriving stock (Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
-
-data ActionTarget
-  = FirstOneOf [Action]
-  | IsAction Action
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (FromJSON, ToJSON)
 
 data Question
   = ChooseOne [Question]

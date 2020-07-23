@@ -12,7 +12,9 @@ import Arkham.Types.Classes
 import Arkham.Types.InvestigatorId
 import Arkham.Types.LocationId
 import Arkham.Types.Message
+import Arkham.Types.Modifier
 import Arkham.Types.SkillType
+import Arkham.Types.Source
 import Arkham.Types.Trait
 import Arkham.Types.TreacheryId
 import ClassyPrelude
@@ -33,6 +35,7 @@ allTreacheries = HashMap.fromList
   , ("01166", ancientEvils)
   , ("01163", rottingRemains)
   , ("01164", frozenInFear)
+  , ("01165", dissonantVoices)
   , ("01167", cryptChill)
   , ("01168", obscuringFog)
   ]
@@ -67,6 +70,7 @@ data Treachery
   | AncientEvils AncientEvilsI
   | RottingRemains RottingRemainsI
   | FrozenInFear FrozenInFearI
+  | DissonantVoices DissonantVoicesI
   | CryptChill CryptChillI
   | ObscuringFog ObscuringFogI
   deriving stock (Show, Generic)
@@ -78,6 +82,7 @@ treacheryAttrs = \case
   AncientEvils attrs -> coerce attrs
   RottingRemains attrs -> coerce attrs
   FrozenInFear attrs -> coerce attrs
+  DissonantVoices attrs -> coerce attrs
   CryptChill attrs -> coerce attrs
   ObscuringFog attrs -> coerce attrs
 
@@ -121,6 +126,13 @@ newtype FrozenInFearI = FrozenInFearI Attrs
 frozenInFear :: TreacheryId -> Treachery
 frozenInFear uuid = FrozenInFear $ FrozenInFearI $ baseAttrs uuid "01164"
 
+newtype DissonantVoicesI= DissonantVoicesI Attrs
+  deriving newtype (Show, ToJSON, FromJSON)
+
+dissonantVoices :: TreacheryId -> Treachery
+dissonantVoices uuid =
+  DissonantVoices $ DissonantVoicesI $ baseAttrs uuid "01165"
+
 newtype CryptChillI = CryptChillI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
@@ -145,6 +157,7 @@ instance (TreacheryRunner env) => RunMessage env Treachery where
     AncientEvils x -> AncientEvils <$> runMessage msg x
     RottingRemains x -> RottingRemains <$> runMessage msg x
     FrozenInFear x -> FrozenInFear <$> runMessage msg x
+    DissonantVoices x -> DissonantVoices <$> runMessage msg x
     CryptChill x -> CryptChill <$> runMessage msg x
     ObscuringFog x -> ObscuringFog <$> runMessage msg x
 
@@ -205,6 +218,19 @@ instance (TreacheryRunner env) => RunMessage env FrozenInFearI where
         []
       )
     _ -> FrozenInFearI <$> runMessage msg attrs
+
+instance (TreacheryRunner env) => RunMessage env DissonantVoicesI where
+  runMessage msg t@(DissonantVoicesI attrs@Attrs {..}) = case msg of
+    RunTreachery iid tid | tid == treacheryId -> do
+      unshiftMessages
+        [ AttachTreacheryToInvestigator tid iid
+        , InvestigatorAddModifier
+          iid
+          (CannotPlay [AssetType, EventType] (TreacherySource tid))
+        ]
+      pure $ DissonantVoicesI $ attrs & attachedInvestigator ?~ iid
+    EndRound -> t <$ unshiftMessage (DiscardTreachery treacheryId)
+    _ -> DissonantVoicesI <$> runMessage msg attrs
 
 instance (TreacheryRunner env) => RunMessage env CryptChillI where
   runMessage msg t@(CryptChillI attrs@Attrs {..}) = case msg of

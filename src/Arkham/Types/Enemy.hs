@@ -14,7 +14,10 @@ import Arkham.Types.Keyword (Keyword)
 import qualified Arkham.Types.Keyword as Keyword
 import Arkham.Types.LocationId
 import Arkham.Types.Message
+import Arkham.Types.Prey
+import Arkham.Types.Query
 import Arkham.Types.SkillType
+import Arkham.Types.Source
 import Arkham.Types.Trait
 import ClassyPrelude
 import Data.Aeson

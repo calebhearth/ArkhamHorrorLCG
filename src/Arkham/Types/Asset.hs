@@ -13,6 +13,7 @@ import Arkham.Types.Classes
 import Arkham.Types.InvestigatorId
 import Arkham.Types.LocationId
 import Arkham.Types.Message
+import Arkham.Types.Source
 import Arkham.Types.Trait
 import ClassyPrelude
 import Data.Aeson

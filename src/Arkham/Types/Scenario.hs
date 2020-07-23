@@ -11,7 +11,9 @@ import Arkham.Types.Card
 import Arkham.Types.Classes
 import Arkham.Types.Difficulty
 import Arkham.Types.Message
+import Arkham.Types.Query
 import Arkham.Types.ScenarioId
+import Arkham.Types.Source
 import qualified Arkham.Types.Token as Token
 import Arkham.Types.Trait
 import ClassyPrelude

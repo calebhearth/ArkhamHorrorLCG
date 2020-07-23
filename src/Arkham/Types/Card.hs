@@ -35,7 +35,7 @@ data PlayerCardType
   = AssetType
   | EventType
   | SkillType
-  deriving stock (Show, Generic)
+  deriving stock (Eq, Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 data EncounterCardType

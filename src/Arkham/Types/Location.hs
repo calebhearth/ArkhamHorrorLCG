@@ -13,6 +13,8 @@ import Arkham.Types.InvestigatorId
 import Arkham.Types.LocationId
 import Arkham.Types.LocationSymbol
 import Arkham.Types.Message
+import Arkham.Types.Query
+import Arkham.Types.Source
 import Arkham.Types.Trait
 import Arkham.Types.TreacheryId
 import ClassyPrelude

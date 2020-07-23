@@ -9,6 +9,8 @@ import Arkham.Types.AgendaId
 import Arkham.Types.Classes
 import Arkham.Types.GameValue
 import Arkham.Types.Message
+import Arkham.Types.Query
+import Arkham.Types.Source
 import ClassyPrelude
 import Data.Aeson
 import Data.Coerce

@@ -13,6 +13,7 @@ import Arkham.Types.EnemyId
 import Arkham.Types.GameValue
 import Arkham.Types.LocationId
 import Arkham.Types.Message
+import Arkham.Types.Query
 import ClassyPrelude
 import Data.Aeson
 import Data.Coerce

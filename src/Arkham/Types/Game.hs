@@ -31,6 +31,8 @@ import Arkham.Types.Location
 import Arkham.Types.LocationId
 import Arkham.Types.Message
 import Arkham.Types.Phase
+import Arkham.Types.Prey
+import Arkham.Types.Query
 import Arkham.Types.Scenario
 import Arkham.Types.ScenarioId
 import Arkham.Types.SkillCheck

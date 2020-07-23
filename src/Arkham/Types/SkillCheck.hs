@@ -10,6 +10,7 @@ import Arkham.Types.Classes
 import Arkham.Types.InvestigatorId
 import Arkham.Types.Message
 import Arkham.Types.SkillType
+import Arkham.Types.Source
 import Arkham.Types.Token
 import ClassyPrelude
 import Data.Aeson
