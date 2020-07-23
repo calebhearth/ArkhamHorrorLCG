@@ -4,6 +4,7 @@ module Arkham.Types.Classes where
 
 import Arkham.Types.LocationId
 import Arkham.Types.Message
+import Arkham.Types.SkillType
 import Arkham.Types.Trait
 import ClassyPrelude
 import Lens.Micro
@@ -71,3 +72,6 @@ class HasTraits a where
 
 class IsAdvanceable a where
   isAdvanceable :: a -> Bool
+
+class HasSkill a where
+  getSkill :: SkillType -> a -> Int

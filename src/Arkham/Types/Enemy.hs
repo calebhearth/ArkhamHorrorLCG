@@ -10,8 +10,11 @@ import Arkham.Types.Classes
 import Arkham.Types.EnemyId
 import Arkham.Types.GameValue
 import Arkham.Types.InvestigatorId
+import Arkham.Types.Keyword (Keyword)
+import qualified Arkham.Types.Keyword as Keyword
 import Arkham.Types.LocationId
 import Arkham.Types.Message
+import Arkham.Types.SkillType
 import Arkham.Types.Trait
 import ClassyPrelude
 import Data.Aeson
@@ -26,7 +29,8 @@ lookupEnemy = fromJustNote "Unkown enemy" . flip HashMap.lookup allEnemies
 
 allEnemies :: HashMap CardCode (EnemyId -> Enemy)
 allEnemies = HashMap.fromList
-  [ ("01118", fleshEater)
+  [ ("01116", ghoulPriest)
+  , ("01118", fleshEater)
   , ("01119", icyGhoul)
   , ("01159", swarmOfRats)
   , ("01160", ghoulMinion)
@@ -44,20 +48,21 @@ data SpawnLocation
   deriving stock (Show, Generic)
 
 data Attrs = Attrs
-  { enemyName                 :: Text
-  , enemyId                   :: EnemyId
-  , enemyCardCode             :: CardCode
+  { enemyName :: Text
+  , enemyId :: EnemyId
+  , enemyCardCode :: CardCode
   , enemyEngagedInvestigators :: HashSet InvestigatorId
-  , enemyLocation             :: LocationId
-  , enemyFight                :: Int
-  , enemyHealth               :: GameValue
-  , enemyEvade                :: Int
-  , enemyDamage               :: Int
-  , enemyHealthDamage         :: Int
-  , enemySanityDamage         :: Int
-  , enemyTraits               :: HashSet Trait
-  , enemyVictory              :: Maybe Int
-  , enemyIsHunter             :: Bool
+  , enemyLocation :: LocationId
+  , enemyFight :: Int
+  , enemyHealth :: GameValue
+  , enemyEvade :: Int
+  , enemyDamage :: Int
+  , enemyHealthDamage :: Int
+  , enemySanityDamage :: Int
+  , enemyTraits :: HashSet Trait
+  , enemyVictory :: Maybe Int
+  , enemyKeywords :: HashSet Keyword
+  , enemyPrey :: Prey
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -76,7 +81,8 @@ health :: Lens' Attrs GameValue
 health = lens enemyHealth $ \m x -> m { enemyHealth = x }
 
 data Enemy
-  = FleshEater FleshEaterI
+  = GhoulPriest GhoulPriestI
+  | FleshEater FleshEaterI
   | IcyGhoul IcyGhoulI
   | SwarmOfRats SwarmOfRatsI
   | GhoulMinion GhoulMinionI
@@ -85,6 +91,7 @@ data Enemy
 
 enemyAttrs :: Enemy -> Attrs
 enemyAttrs = \case
+  GhoulPriest attrs -> coerce attrs
   FleshEater attrs -> coerce attrs
   IcyGhoul attrs -> coerce attrs
   SwarmOfRats attrs -> coerce attrs
@@ -111,8 +118,23 @@ baseAttrs eid cardCode =
       , enemySanityDamage = 0
       , enemyTraits = HashSet.fromList ecTraits
       , enemyVictory = Nothing
-      , enemyIsHunter = False
+      , enemyKeywords = HashSet.fromList ecKeywords
+      , enemyPrey = AnyPrey
       }
+
+newtype GhoulPriestI = GhoulPriestI Attrs
+  deriving newtype (Show, ToJSON, FromJSON)
+
+ghoulPriest :: EnemyId -> Enemy
+ghoulPriest uuid = GhoulPriest $ GhoulPriestI $ (baseAttrs uuid "01116")
+  { enemyHealthDamage = 2
+  , enemySanityDamage = 2
+  , enemyFight = 4
+  , enemyHealth = PerPlayer 5
+  , enemyEvade = 4
+  , enemyVictory = Just 2
+  , enemyPrey = HighestSkill SkillCombat
+  }
 
 newtype FleshEaterI = FleshEaterI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
@@ -148,7 +170,6 @@ swarmOfRats :: EnemyId -> Enemy
 swarmOfRats uuid = SwarmOfRats $ SwarmOfRatsI $ (baseAttrs uuid "01159")
   { enemyHealthDamage = 1
   , enemyEvade = 3
-  , enemyIsHunter = True
   }
 
 newtype GhoulMinionI = GhoulMinionI Attrs
@@ -172,6 +193,7 @@ type EnemyRunner env
 
 instance (EnemyRunner env) => RunMessage env Enemy where
   runMessage msg = \case
+    GhoulPriest x -> GhoulPriest <$> runMessage msg x
     FleshEater x -> FleshEater <$> runMessage msg x
     IcyGhoul x -> IcyGhoul <$> runMessage msg x
     SwarmOfRats x -> SwarmOfRats <$> runMessage msg x
@@ -187,6 +209,9 @@ spawnAt lid eid = do
   if lid `elem` locations
     then unshiftMessage (EnemySpawn lid eid)
     else unshiftMessage (RemoveEnemy eid)
+
+instance (EnemyRunner env) => RunMessage env GhoulPriestI where
+  runMessage msg (GhoulPriestI attrs) = GhoulPriestI <$> runMessage msg attrs
 
 instance (EnemyRunner env) => RunMessage env FleshEaterI where
   runMessage msg e@(FleshEaterI attrs@Attrs {..}) = case msg of
@@ -209,22 +234,38 @@ instance (EnemyRunner env) => RunMessage env GhoulMinionI where
 instance (EnemyRunner env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
     EnemySpawn lid eid | eid == enemyId -> pure $ a & location .~ lid
-    HuntersMove | enemyIsHunter && null enemyEngagedInvestigators -> do
-      closestLocationIds <-
-        HashSet.toList . HashSet.map unClosestLocationId <$> asks
-          (getSet (enemyLocation, AnyPrey))
-      case closestLocationIds of
-        [] -> pure a
-        [lid] -> a <$ unshiftMessage (EnemyMove enemyId enemyLocation lid)
-        ls -> a <$ unshiftMessage
-          (Ask $ ChooseOne $ map
-            (ChoiceResult . EnemyMove enemyId enemyLocation)
-            ls
-          )
+    HuntersMove
+      | Keyword.Hunter `elem` enemyKeywords && null enemyEngagedInvestigators -> do
+        closestLocationIds <-
+          HashSet.toList . HashSet.map unClosestLocationId <$> asks
+            (getSet (enemyLocation, AnyPrey))
+        case closestLocationIds of
+          [] -> pure a
+          [lid] -> a <$ unshiftMessage (EnemyMove enemyId enemyLocation lid)
+          ls -> a <$ unshiftMessage
+            (Ask $ ChooseOne $ map
+              (ChoiceResult . EnemyMove enemyId enemyLocation)
+              ls
+            )
     EnemiesAttack | not (null enemyEngagedInvestigators) -> do
       unshiftMessages $ map (flip EnemyWillAttack enemyId) $ HashSet.toList
         enemyEngagedInvestigators
       pure a
+    AttackEnemy iid eid skillType baseSkillValue damageAmount
+      | eid == enemyId -> do
+        let
+          onFailure = if Keyword.Retaliate `elem` enemyKeywords
+            then [EnemyAttack iid eid]
+            else []
+        a <$ unshiftMessage
+          (BeginSkillCheck
+            iid
+            skillType
+            enemyFight
+            baseSkillValue
+            [EnemyDamage eid (InvestigatorSource iid) damageAmount]
+            onFailure
+          )
     EnemyAttack iid eid | eid == enemyId -> a <$ unshiftMessage
       (InvestigatorAssignDamage iid enemyId enemyHealthDamage enemySanityDamage)
     EnemyDamage eid source amount | eid == enemyId -> do

@@ -42,7 +42,9 @@ newtype LeadInvestigatorId = LeadInvestigatorId { unLeadInvestigatorId :: Invest
 
 newtype InvestigatorLocation = InvestigatorLocation InvestigatorId
 data AllInvestigators = AllInvestigators
-data Prey = AnyPrey
+data Prey = AnyPrey | HighestSkill SkillType | LowestSkill SkillType
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 data Source
   = AssetSource AssetId
@@ -157,6 +159,7 @@ data Message
   | SetEncounterDeck [EncounterCard]
   | TreacheryFailure InvestigatorId TreacheryId -- TODO: better name
   | ChooseAndDiscardAsset InvestigatorId
+  | AttackEnemy InvestigatorId EnemyId SkillType Int Int
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 

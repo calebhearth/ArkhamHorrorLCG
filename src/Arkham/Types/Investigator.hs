@@ -82,6 +82,9 @@ instance HasLocation Investigator where
 instance HasClueCount Investigator where
   getClueCount = ClueCount . investigatorClues . investigatorAttrs
 
+instance HasSkill Investigator where
+  getSkill skillType = skillValueFor skillType . investigatorAttrs
+
 class GetInvestigatorId a where
   getInvestigatorId :: a -> InvestigatorId
 
@@ -197,8 +200,14 @@ baseAttrs iid name health sanity willpower intellect combat agility traits =
 newtype RolandBanksI = RolandBanksI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
 
-isPrey :: Prey -> Investigator -> Bool
-isPrey AnyPrey _ = True
+isPrey :: (HasSet Int SkillType env) => Prey -> env -> Investigator -> Bool
+isPrey AnyPrey _ _ = True
+isPrey (HighestSkill skillType) env i =
+  fromMaybe 0 (maximumMay . HashSet.toList $ getSet skillType env)
+    == skillValueFor skillType (investigatorAttrs i)
+isPrey (LowestSkill skillType) env i =
+  fromMaybe 100 (minimumMay . HashSet.toList $ getSet skillType env)
+    == skillValueFor skillType (investigatorAttrs i)
 
 hasEndedTurn :: Investigator -> Bool
 hasEndedTurn = view endedTurn . investigatorAttrs
@@ -292,6 +301,13 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
         $ a
         & (assets %~ HashSet.delete aid)
         & (discard %~ (lookupCard cardCode :))
+    ChooseFightEnemyAction iid | iid == investigatorId -> a <$ unshiftMessage
+      (Ask $ ChooseOne $ map
+        (\eid -> ChoiceResult
+          (AttackEnemy iid eid SkillCombat (skillValueFor SkillCombat a) 1)
+        )
+        (HashSet.toList investigatorEngagedEnemies)
+      )
     ChooseMoveAction iid | iid == investigatorId -> a <$ unshiftMessage
       (Ask $ ChooseOne $ map
         (\l -> ChoiceResults [CheckAttackOfOpportunity iid, MoveTo iid l])

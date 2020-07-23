@@ -34,6 +34,7 @@ import Arkham.Types.Phase
 import Arkham.Types.Scenario
 import Arkham.Types.ScenarioId
 import Arkham.Types.SkillCheck
+import Arkham.Types.SkillType
 import Arkham.Types.Token (Token)
 import qualified Arkham.Types.Token as Token
 import Arkham.Types.Trait
@@ -268,6 +269,10 @@ instance HasSet ClosestLocationId (LocationId, Prey) Game where
     HashSet.fromList . map ClosestLocationId $ getShortestPath g start matcher
     where matcher lid = not . null $ getSet @PreyId (prey, lid) g
 
+instance HasSet Int SkillType Game where
+  getSet skillType g = HashSet.fromList
+    $ map (getSkill skillType) (HashMap.elems $ g ^. investigators)
+
 instance HasSet PreyId (Prey, LocationId) Game where
   getSet (preyType, lid) g = HashSet.map PreyId
     $ HashSet.filter matcher investigators'
@@ -275,7 +280,7 @@ instance HasSet PreyId (Prey, LocationId) Game where
     location = fromJustNote "No location" $ g ^? locations . ix lid
     investigators' = getSet () location
     matcher iid =
-      isPrey preyType
+      isPrey preyType g
         . fromJustNote "No investigator"
         $ (g ^? investigators . ix iid)
 
