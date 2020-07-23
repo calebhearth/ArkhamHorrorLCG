@@ -160,6 +160,10 @@ data Message
   | TreacheryFailure InvestigatorId TreacheryId -- TODO: better name
   | ChooseAndDiscardAsset InvestigatorId
   | AttackEnemy InvestigatorId EnemyId SkillType Int Int
+  | SuccessfulInvestigation LocationId
+  | AttachTreacheryToLocation TreacheryId LocationId
+  | LocationIncreaseShroud LocationId Int
+  | LocationDecreaseShroud LocationId Int
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 

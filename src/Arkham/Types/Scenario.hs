@@ -92,13 +92,12 @@ instance (ScenarioRunner env) => RunMessage env TheGatheringI where
       pushMessages
         [ SetEncounterDeck $ map
           (fromJustNote "missing card" . flip HashMap.lookup allEncounterCards)
-          ["01167", "01167"]
+          ["01168", "01168"]
         , AddAgenda "01105"
         , AddAct "01108"
         , PlaceLocation "01111"
         , RevealLocation "01111"
         , MoveAllTo "01111"
-        , CreateEnemyAt "01116" "01111"
         ]
       TheGatheringI <$> runMessage msg attrs
     ResolveToken Token.Skull iid skillValue ->

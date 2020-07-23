@@ -42,11 +42,6 @@ instance HasCardCode Enemy where
 instance HasTraits Enemy where
   traitsOf = enemyTraits . enemyAttrs
 
-data SpawnLocation
-  = SpawnAt LocationId
-  | CurrentInvestigatorLocation
-  deriving stock (Show, Generic)
-
 data Attrs = Attrs
   { enemyName :: Text
   , enemyId :: EnemyId

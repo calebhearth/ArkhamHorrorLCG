@@ -214,4 +214,11 @@ allEncounterCards = HashMap.fromList $ map
     , ecTraits = [Hazard]
     , ecKeywords = mempty
     }
+  , MkEncounterCard
+    { ecCardCode = "01168"
+    , ecName = "Obscuring Fog"
+    , ecCardType = TreacheryType
+    , ecTraits = [Hazard]
+    , ecKeywords = mempty
+    }
   ]

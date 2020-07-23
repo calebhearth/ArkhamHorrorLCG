@@ -14,6 +14,7 @@ import Arkham.Types.LocationId
 import Arkham.Types.LocationSymbol
 import Arkham.Types.Message
 import Arkham.Types.Trait
+import Arkham.Types.TreacheryId
 import ClassyPrelude
 import Data.Aeson
 import Data.Coerce
@@ -47,6 +48,7 @@ data Attrs = Attrs
   , locationConnectedSymbols   :: HashSet LocationSymbol
   , locationConnectedLocations :: HashSet LocationId
   , locationTraits             :: HashSet Trait
+  , locationTreacheries :: HashSet TreacheryId
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -68,6 +70,9 @@ investigators :: Lens' Attrs (HashSet InvestigatorId)
 investigators =
   lens locationInvestigators $ \m x -> m { locationInvestigators = x }
 
+treacheries :: Lens' Attrs (HashSet TreacheryId)
+treacheries = lens locationTreacheries $ \m x -> m { locationTreacheries = x }
+
 connectedLocations :: Lens' Attrs (HashSet LocationId)
 connectedLocations =
   lens locationConnectedLocations $ \m x -> m { locationConnectedLocations = x }
@@ -80,12 +85,12 @@ baseAttrs
   -> LocationSymbol
   -> [LocationSymbol]
   -> Attrs
-baseAttrs lid name shroud revealClues symbol' connectedSymbols' = Attrs
+baseAttrs lid name shroud' revealClues symbol' connectedSymbols' = Attrs
   { locationName = name
   , locationId = lid
   , locationRevealClues = revealClues
   , locationClues = 0
-  , locationShroud = shroud
+  , locationShroud = shroud'
   , locationRevealed = False
   , locationBlocked = False
   , locationInvestigators = mempty
@@ -95,10 +100,14 @@ baseAttrs lid name shroud revealClues symbol' connectedSymbols' = Attrs
   , locationConnectedSymbols = HashSet.fromList connectedSymbols'
   , locationConnectedLocations = mempty
   , locationTraits = mempty
+  , locationTreacheries = mempty
   }
 
 clues :: Lens' Attrs Int
 clues = lens locationClues $ \m x -> m { locationClues = x }
+
+shroud :: Lens' Attrs Int
+shroud = lens locationShroud $ \m x -> m { locationShroud = x }
 
 revealed :: Lens' Attrs Bool
 revealed = lens locationRevealed $ \m x -> m { locationRevealed = x }
@@ -210,12 +219,16 @@ instance (LocationRunner env) => RunMessage env Attrs where
           skillType
           locationShroud
           skillValue
-          [DiscoverClueAtLocation iid lid]
+          [SuccessfulInvestigation lid, DiscoverClueAtLocation iid lid]
           []
         )
     PlacedLocation lid | lid == locationId -> if locationBlocked
       then pure a
       else a <$ unshiftMessage (AddConnection lid locationSymbol)
+    AttachTreacheryToLocation tid lid | lid == locationId ->
+      pure $ a & treacheries %~ HashSet.insert tid
+    LocationIncreaseShroud lid n | lid == locationId -> pure $ a & shroud +~ n
+    LocationDecreaseShroud lid n | lid == locationId -> pure $ a & shroud -~ n
     AddConnection lid symbol' | symbol' `elem` locationConnectedSymbols -> do
       unshiftMessages
         [ AddConnectionBack locationId locationSymbol

@@ -55,8 +55,8 @@ runCheck modifiedSkillValue = unshiftMessage (RunSkillCheck modifiedSkillValue)
 class HasSet c b a where
   getSet :: b -> a -> HashSet c
 
-class HasId b a where
-  getId :: a -> b
+class HasId c b a where
+  getId :: b -> a -> c
 
 class HasLocation a where
   locationOf :: a -> LocationId

@@ -9,6 +9,7 @@ import Arkham.Types.AssetId
 import Arkham.Types.Card
 import Arkham.Types.Classes
 import Arkham.Types.InvestigatorId
+import Arkham.Types.LocationId
 import Arkham.Types.Message
 import Arkham.Types.SkillType
 import Arkham.Types.Trait
@@ -18,6 +19,7 @@ import Data.Aeson
 import Data.Coerce
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
+import Lens.Micro
 import Safe (fromJustNote)
 
 lookupTreachery :: CardCode -> (TreacheryId -> Treachery)
@@ -30,6 +32,7 @@ allTreacheries = HashMap.fromList
   , ("01166", ancientEvils)
   , ("01163", rottingRemains)
   , ("01167", cryptChill)
+  , ("01168", obscuringFog)
   ]
 
 instance HasCardCode Treachery where
@@ -43,15 +46,21 @@ data Attrs = Attrs
   , treacheryId :: TreacheryId
   , treacheryCardCode :: CardCode
   , treacheryTraits :: HashSet Trait
+  , treacheryAttachedLocation :: Maybe LocationId
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
+
+attachedLocation :: Lens' Attrs (Maybe LocationId)
+attachedLocation =
+  lens treacheryAttachedLocation $ \m x -> m { treacheryAttachedLocation = x }
 
 data Treachery
   = GraspingHands GraspingHandsI
   | AncientEvils AncientEvilsI
   | RottingRemains RottingRemainsI
   | CryptChill CryptChillI
+  | ObscuringFog ObscuringFogI
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -61,6 +70,7 @@ treacheryAttrs = \case
   AncientEvils attrs -> coerce attrs
   RottingRemains attrs -> coerce attrs
   CryptChill attrs -> coerce attrs
+  ObscuringFog attrs -> coerce attrs
 
 baseAttrs :: TreacheryId -> CardCode -> Attrs
 baseAttrs tid cardCode =
@@ -74,6 +84,7 @@ baseAttrs tid cardCode =
       , treacheryId = tid
       , treacheryCardCode = ecCardCode
       , treacheryTraits = HashSet.fromList ecTraits
+      , treacheryAttachedLocation = Nothing
       }
 
 newtype GraspingHandsI = GraspingHandsI Attrs
@@ -100,7 +111,17 @@ newtype CryptChillI = CryptChillI Attrs
 cryptChill :: TreacheryId -> Treachery
 cryptChill uuid = CryptChill $ CryptChillI $ baseAttrs uuid "01167"
 
-type TreacheryRunner env = (HasQueue env, HasSet AssetId InvestigatorId env)
+newtype ObscuringFogI = ObscuringFogI Attrs
+  deriving newtype (Show, ToJSON, FromJSON)
+
+obscuringFog :: TreacheryId -> Treachery
+obscuringFog uuid = ObscuringFog $ ObscuringFogI $ baseAttrs uuid "01168"
+
+type TreacheryRunner env
+  = ( HasQueue env
+    , HasSet AssetId InvestigatorId env
+    , HasId LocationId InvestigatorId env
+    )
 
 instance (TreacheryRunner env) => RunMessage env Treachery where
   runMessage msg = \case
@@ -108,6 +129,7 @@ instance (TreacheryRunner env) => RunMessage env Treachery where
     AncientEvils x -> AncientEvils <$> runMessage msg x
     RottingRemains x -> RottingRemains <$> runMessage msg x
     CryptChill x -> CryptChill <$> runMessage msg x
+    ObscuringFog x -> ObscuringFog <$> runMessage msg x
 
 instance (TreacheryRunner env) => RunMessage env GraspingHandsI where
   runMessage msg t@(GraspingHandsI attrs@Attrs {..}) = case msg of
@@ -153,6 +175,20 @@ instance (TreacheryRunner env) => RunMessage env CryptChillI where
           t <$ unshiftMessage
             (InvestigatorDamage iid (TreacherySource treacheryId) 2 0)
     _ -> CryptChillI <$> runMessage msg attrs
+
+instance (TreacheryRunner env) => RunMessage env ObscuringFogI where
+  runMessage msg t@(ObscuringFogI attrs@Attrs {..}) = case msg of
+    RunTreachery iid tid | tid == treacheryId -> do
+      currentLocationId <- asks (getId iid)
+      unshiftMessages
+        [ AttachTreacheryToLocation tid currentLocationId
+        , LocationIncreaseShroud currentLocationId 2
+        ]
+      pure $ ObscuringFogI $ attrs & attachedLocation ?~ currentLocationId
+    SuccessfulInvestigation lid | Just lid == treacheryAttachedLocation ->
+      t <$ unshiftMessages
+        [LocationDecreaseShroud lid 2, DiscardTreachery treacheryId]
+    _ -> ObscuringFogI <$> runMessage msg attrs
 
 instance (TreacheryRunner env) => RunMessage env Attrs where
   runMessage _msg a@Attrs {..} = pure a

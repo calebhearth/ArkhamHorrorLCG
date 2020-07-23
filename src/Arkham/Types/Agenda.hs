@@ -93,7 +93,7 @@ theyreGettingOut = TheyreGettingOut . TheyreGettingOutI $ baseAttrs
   (Static 10)
 
 type AgendaRunner env
-  = (HasId LeadInvestigatorId env, HasCount PlayerCount () env, HasQueue env)
+  = (HasId LeadInvestigatorId () env, HasCount PlayerCount () env, HasQueue env)
 
 instance (AgendaRunner env) => RunMessage env Agenda where
   runMessage msg = \case
@@ -104,7 +104,7 @@ instance (AgendaRunner env) => RunMessage env Agenda where
 instance (AgendaRunner env) => RunMessage env WhatsGoingOnI where
   runMessage msg a@(WhatsGoingOnI attrs@Attrs {..}) = case msg of
     AdvanceAgenda aid | aid == agendaId -> do
-      leadInvestigatorId <- unLeadInvestigatorId <$> asks getId
+      leadInvestigatorId <- unLeadInvestigatorId <$> asks (getId ())
       a <$ unshiftMessages
         [ Ask $ ChooseOne
           [ ChoiceResult AllRandomDiscard

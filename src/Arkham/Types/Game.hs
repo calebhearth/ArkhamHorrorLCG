@@ -178,8 +178,11 @@ newGame scenarioId investigatorsList = do
   investigatorsMap =
     HashMap.fromList $ map (\i -> (getInvestigatorId i, i)) investigatorsList
 
-instance HasId LeadInvestigatorId Game where
-  getId = LeadInvestigatorId . view leadInvestigatorId
+instance HasId LeadInvestigatorId () Game where
+  getId _ = LeadInvestigatorId . view leadInvestigatorId
+
+instance HasId LocationId InvestigatorId Game where
+  getId = locationFor
 
 instance HasCount ClueCount LocationId Game where
   getCount lid g =
