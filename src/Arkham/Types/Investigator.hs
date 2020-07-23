@@ -64,7 +64,7 @@ data Attrs = Attrs
   , investigatorClues :: Int
   , investigatorResources :: Int
   , investigatorLocation :: LocationId
-  , investigatorActionsTaken :: Int
+  , investigatorActionsTaken :: [Action]
   , investigatorRemainingActions :: Int
   , investigatorEndedTurn :: Bool
   , investigatorEngagedEnemies :: HashSet EnemyId
@@ -124,7 +124,7 @@ remainingActions :: Lens' Attrs Int
 remainingActions = lens investigatorRemainingActions
   $ \m x -> m { investigatorRemainingActions = x }
 
-actionsTaken :: Lens' Attrs Int
+actionsTaken :: Lens' Attrs [Action]
 actionsTaken =
   lens investigatorActionsTaken $ \m x -> m { investigatorActionsTaken = x }
 
@@ -205,7 +205,7 @@ baseAttrs iid name health sanity willpower intellect combat agility traits =
     , investigatorClues = 0
     , investigatorResources = 5
     , investigatorLocation = "00000"
-    , investigatorActionsTaken = 0
+    , investigatorActionsTaken = mempty
     , investigatorRemainingActions = 3
     , investigatorEndedTurn = False
     , investigatorEngagedEnemies = mempty
@@ -245,17 +245,10 @@ remainingHealth :: Investigator -> Int
 remainingHealth i = investigatorHealth attrs - investigatorHealthDamage attrs
   where attrs = investigatorAttrs i
 
-firstFor :: Action -> ActionTarget
-firstFor = \case
-  Action.Move -> FirstMove
-  Action.Fight -> FirstFight
-  Action.Evade -> FirstEvade
-  Action.Draw -> FirstDraw
-  Action.Resource -> FirstResource
-  Action.Engage -> FirstEngage
-  Action.Play -> FirstPlay
-  Action.Ability -> FirstAbility
-  Action.Investigate -> FirstInvestigate
+matchTarget :: ActionTarget -> Action -> Attrs -> Bool
+matchTarget (FirstOneOf as) action attrs =
+  action `elem` as && action `notElem` investigatorActionsTaken attrs
+matchTarget (IsAction a) action _ = action == a
 
 actionCost :: Action -> Attrs -> Int
 actionCost a attrs = foldr applyModifier 1 filterModifiers
@@ -263,9 +256,7 @@ actionCost a attrs = foldr applyModifier 1 filterModifiers
   applyModifier (ActionCostOf _ m _) n = n + m
   filterModifiers = filter isApplicable allModifiers
   allModifiers = investigatorModifiers attrs
-  isFirstAction = investigatorActionsTaken attrs == 0
-  isApplicable (ActionCostOf target _ _) =
-    target == IsAction a || (isFirstAction && target == firstFor a)
+  isApplicable (ActionCostOf match _ _) = matchTarget match a attrs
 
 rolandBanks :: Investigator
 rolandBanks = RolandBanks $ RolandBanksI $ baseAttrs
@@ -341,7 +332,7 @@ takeAction :: Action -> Attrs -> Attrs
 takeAction action a =
   a
     & (remainingActions -~ actionCost action a)
-    & (actionsTaken +~ actionCost action a)
+    & (actionsTaken %~ (<> [action]))
 
 instance (InvestigatorRunner env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
@@ -433,7 +424,11 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
         ((source /=) . sourceOfModifier)
     ChooseEndTurn iid | iid == investigatorId -> pure $ a & endedTurn .~ True
     BeginRound ->
-      pure $ a & endedTurn .~ False & remainingActions .~ 3 & actionsTaken .~ 0
+      pure
+        $ a
+        & (endedTurn .~ False)
+        & (remainingActions .~ 3)
+        & (actionsTaken .~ mempty)
     ChooseDrawCardAction iid | iid == investigatorId -> do
       unshiftMessages [CheckAttackOfOpportunity iid, DrawCards iid 1]
       pure $ takeAction Action.Draw a

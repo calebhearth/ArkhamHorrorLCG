@@ -187,15 +187,7 @@ data Modifier
   deriving anyclass (FromJSON, ToJSON)
 
 data ActionTarget
-  = FirstDraw
-  | FirstResource
-  | FirstEngage
-  | FirstPlay
-  | FirstAbility
-  | FirstInvestigate
-  | FirstMove
-  | FirstFight
-  | FirstEvade
+  = FirstOneOf [Action]
   | IsAction Action
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)

@@ -5,6 +5,7 @@ module Arkham.Types.Treachery
   )
 where
 
+import qualified Arkham.Types.Action as Action
 import Arkham.Types.AssetId
 import Arkham.Types.Card
 import Arkham.Types.Classes
@@ -184,13 +185,11 @@ instance (TreacheryRunner env) => RunMessage env FrozenInFearI where
         [ AttachTreacheryToInvestigator tid iid
         , InvestigatorAddModifier
           iid
-          (ActionCostOf FirstMove 1 (TreacherySource tid))
-        , InvestigatorAddModifier
-          iid
-          (ActionCostOf FirstFight 1 (TreacherySource tid))
-        , InvestigatorAddModifier
-          iid
-          (ActionCostOf FirstEvade 1 (TreacherySource tid))
+          (ActionCostOf
+            (FirstOneOf [Action.Move, Action.Fight, Action.Evade])
+            1
+            (TreacherySource tid)
+          )
         ]
       pure $ FrozenInFearI $ attrs & attachedInvestigator ?~ iid
     ChooseEndTurn iid -> t <$ unshiftMessage
