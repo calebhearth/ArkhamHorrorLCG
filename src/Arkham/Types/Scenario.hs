@@ -92,7 +92,7 @@ instance (ScenarioRunner env) => RunMessage env TheGatheringI where
       pushMessages
         [ SetEncounterDeck $ map
           (fromJustNote "missing card" . flip HashMap.lookup allEncounterCards)
-          ["01168", "01168"]
+          ["01164", "01164", "01164"]
         , AddAgenda "01105"
         , AddAct "01108"
         , PlaceLocation "01111"

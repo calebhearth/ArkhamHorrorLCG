@@ -31,6 +31,7 @@ allTreacheries = HashMap.fromList
   [ ("01162", graspingHands)
   , ("01166", ancientEvils)
   , ("01163", rottingRemains)
+  , ("01164", frozenInFear)
   , ("01167", cryptChill)
   , ("01168", obscuringFog)
   ]
@@ -47,6 +48,7 @@ data Attrs = Attrs
   , treacheryCardCode :: CardCode
   , treacheryTraits :: HashSet Trait
   , treacheryAttachedLocation :: Maybe LocationId
+  , treacheryAttachedInvestigator :: Maybe InvestigatorId
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -55,10 +57,15 @@ attachedLocation :: Lens' Attrs (Maybe LocationId)
 attachedLocation =
   lens treacheryAttachedLocation $ \m x -> m { treacheryAttachedLocation = x }
 
+attachedInvestigator :: Lens' Attrs (Maybe InvestigatorId)
+attachedInvestigator = lens treacheryAttachedInvestigator
+  $ \m x -> m { treacheryAttachedInvestigator = x }
+
 data Treachery
   = GraspingHands GraspingHandsI
   | AncientEvils AncientEvilsI
   | RottingRemains RottingRemainsI
+  | FrozenInFear FrozenInFearI
   | CryptChill CryptChillI
   | ObscuringFog ObscuringFogI
   deriving stock (Show, Generic)
@@ -69,6 +76,7 @@ treacheryAttrs = \case
   GraspingHands attrs -> coerce attrs
   AncientEvils attrs -> coerce attrs
   RottingRemains attrs -> coerce attrs
+  FrozenInFear attrs -> coerce attrs
   CryptChill attrs -> coerce attrs
   ObscuringFog attrs -> coerce attrs
 
@@ -85,6 +93,7 @@ baseAttrs tid cardCode =
       , treacheryCardCode = ecCardCode
       , treacheryTraits = HashSet.fromList ecTraits
       , treacheryAttachedLocation = Nothing
+      , treacheryAttachedInvestigator = Nothing
       }
 
 newtype GraspingHandsI = GraspingHandsI Attrs
@@ -104,6 +113,12 @@ newtype RottingRemainsI = RottingRemainsI Attrs
 
 rottingRemains :: TreacheryId -> Treachery
 rottingRemains uuid = RottingRemains $ RottingRemainsI $ baseAttrs uuid "01163"
+
+newtype FrozenInFearI = FrozenInFearI Attrs
+  deriving newtype (Show, ToJSON, FromJSON)
+
+frozenInFear :: TreacheryId -> Treachery
+frozenInFear uuid = FrozenInFear $ FrozenInFearI $ baseAttrs uuid "01164"
 
 newtype CryptChillI = CryptChillI Attrs
   deriving newtype (Show, ToJSON, FromJSON)
@@ -128,6 +143,7 @@ instance (TreacheryRunner env) => RunMessage env Treachery where
     GraspingHands x -> GraspingHands <$> runMessage msg x
     AncientEvils x -> AncientEvils <$> runMessage msg x
     RottingRemains x -> RottingRemains <$> runMessage msg x
+    FrozenInFear x -> FrozenInFear <$> runMessage msg x
     CryptChill x -> CryptChill <$> runMessage msg x
     ObscuringFog x -> ObscuringFog <$> runMessage msg x
 
@@ -160,6 +176,36 @@ instance (TreacheryRunner env) => RunMessage env RottingRemainsI where
       , DiscardTreachery tid
       ]
     _ -> RottingRemainsI <$> runMessage msg attrs
+
+instance (TreacheryRunner env) => RunMessage env FrozenInFearI where
+  runMessage msg t@(FrozenInFearI attrs@Attrs {..}) = case msg of
+    RunTreachery iid tid | tid == treacheryId -> do
+      unshiftMessages
+        [ AttachTreacheryToInvestigator tid iid
+        , InvestigatorAddModifier
+          iid
+          (ActionCostOf FirstMove 1 (TreacherySource tid))
+        , InvestigatorAddModifier
+          iid
+          (ActionCostOf FirstFight 1 (TreacherySource tid))
+        , InvestigatorAddModifier
+          iid
+          (ActionCostOf FirstEvade 1 (TreacherySource tid))
+        ]
+      pure $ FrozenInFearI $ attrs & attachedInvestigator ?~ iid
+    ChooseEndTurn iid -> t <$ unshiftMessage
+      (RevelationSkillCheck
+        iid
+        SkillWillpower
+        3
+        [ InvestigatorRemoveAllModifiersFromSource
+          iid
+          (TreacherySource treacheryId)
+        , DiscardTreachery treacheryId
+        ]
+        []
+      )
+    _ -> FrozenInFearI <$> runMessage msg attrs
 
 instance (TreacheryRunner env) => RunMessage env CryptChillI where
   runMessage msg t@(CryptChillI attrs@Attrs {..}) = case msg of

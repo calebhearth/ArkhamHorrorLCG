@@ -5,14 +5,19 @@ module Arkham.Types.Message
   , ClueCount(..)
   , PlayerCount(..)
   , EnemyCount(..)
+  , RemainingHealth(..)
   , InvestigatorLocation(..)
   , LeadInvestigatorId(..)
   , AllInvestigators(..)
   , Prey(..)
+  , Modifier(..)
+  , sourceOfModifier
+  , ActionTarget(..)
   )
 where
 
 import Arkham.Types.ActId
+import Arkham.Types.Action (Action)
 import Arkham.Types.AgendaId
 import Arkham.Types.AssetId
 import Arkham.Types.Card
@@ -29,6 +34,8 @@ import Data.Aeson
 
 newtype EnemyCount = EnemyCount { unEnemyCount :: Int }
 newtype ClueCount = ClueCount { unClueCount :: Int }
+newtype RemainingHealth = RemainingHealth { unRemainingHealth :: Int }
+  deriving newtype (Eq, Hashable)
 
 instance Semigroup ClueCount where
   (ClueCount a) <> (ClueCount b) = ClueCount (a + b)
@@ -42,7 +49,7 @@ newtype LeadInvestigatorId = LeadInvestigatorId { unLeadInvestigatorId :: Invest
 
 newtype InvestigatorLocation = InvestigatorLocation InvestigatorId
 data AllInvestigators = AllInvestigators
-data Prey = AnyPrey | HighestSkill SkillType | LowestSkill SkillType
+data Prey = AnyPrey | HighestSkill SkillType | LowestHealth
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -55,7 +62,7 @@ data Source
   | LocationSource LocationId
   | SkillCheckSource
   | TreacherySource TreacheryId
-  deriving stock (Show, Generic)
+  deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 data Message
@@ -90,6 +97,7 @@ data Message
   | RemoveLocation LocationId
   | RemoveEnemy EnemyId
   | MoveAllTo LocationId
+  | MoveAction InvestigatorId LocationId
   | MoveTo InvestigatorId LocationId
   | PrePlayerWindow
   | PlayerWindow InvestigatorId
@@ -164,8 +172,33 @@ data Message
   | AttachTreacheryToLocation TreacheryId LocationId
   | LocationIncreaseShroud LocationId Int
   | LocationDecreaseShroud LocationId Int
+  | AttachTreacheryToInvestigator TreacheryId InvestigatorId
+  | InvestigatorAddModifier InvestigatorId Modifier
+  | InvestigatorRemoveAllModifiersFromSource InvestigatorId Source
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
+
+sourceOfModifier :: Modifier -> Source
+sourceOfModifier (ActionCostOf _ _ s) = s
+
+data Modifier
+  = ActionCostOf ActionTarget Int Source
+  deriving stock (Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+data ActionTarget
+  = FirstDraw
+  | FirstResource
+  | FirstEngage
+  | FirstPlay
+  | FirstAbility
+  | FirstInvestigate
+  | FirstMove
+  | FirstFight
+  | FirstEvade
+  | IsAction Action
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 
 data Question
   = ChooseOne [Question]

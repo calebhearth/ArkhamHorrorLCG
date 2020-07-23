@@ -34,6 +34,7 @@ allEnemies = HashMap.fromList
   , ("01119", icyGhoul)
   , ("01159", swarmOfRats)
   , ("01160", ghoulMinion)
+  , ("01161", ravenousGhoul)
   ]
 
 instance HasCardCode Enemy where
@@ -81,6 +82,7 @@ data Enemy
   | IcyGhoul IcyGhoulI
   | SwarmOfRats SwarmOfRatsI
   | GhoulMinion GhoulMinionI
+  | RavenousGhoul RavenousGhoulI
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -91,6 +93,7 @@ enemyAttrs = \case
   IcyGhoul attrs -> coerce attrs
   SwarmOfRats attrs -> coerce attrs
   GhoulMinion attrs -> coerce attrs
+  RavenousGhoul attrs -> coerce attrs
 
 baseAttrs :: EnemyId -> CardCode -> Attrs
 baseAttrs eid cardCode =
@@ -179,6 +182,19 @@ ghoulMinion uuid = GhoulMinion $ GhoulMinionI $ (baseAttrs uuid "01160")
   , enemyEvade = 2
   }
 
+newtype RavenousGhoulI = RavenousGhoulI Attrs
+  deriving newtype (Show, ToJSON, FromJSON)
+
+ravenousGhoul :: EnemyId -> Enemy
+ravenousGhoul uuid = RavenousGhoul $ RavenousGhoulI $ (baseAttrs uuid "01160")
+  { enemyHealthDamage = 1
+  , enemySanityDamage = 1
+  , enemyFight = 3
+  , enemyHealth = Static 3
+  , enemyEvade = 3
+  , enemyPrey = LowestHealth
+  }
+
 type EnemyRunner env
   = ( HasSet LocationId () env
     , HasCount PlayerCount () env
@@ -193,6 +209,7 @@ instance (EnemyRunner env) => RunMessage env Enemy where
     IcyGhoul x -> IcyGhoul <$> runMessage msg x
     SwarmOfRats x -> SwarmOfRats <$> runMessage msg x
     GhoulMinion x -> GhoulMinion <$> runMessage msg x
+    RavenousGhoul x -> RavenousGhoul <$> runMessage msg x
 
 spawnAt
   :: (MonadIO m, HasSet LocationId () env, MonadReader env m, HasQueue env)
@@ -225,6 +242,10 @@ instance (EnemyRunner env) => RunMessage env SwarmOfRatsI where
 
 instance (EnemyRunner env) => RunMessage env GhoulMinionI where
   runMessage msg (GhoulMinionI attrs) = GhoulMinionI <$> runMessage msg attrs
+
+instance (EnemyRunner env) => RunMessage env RavenousGhoulI where
+  runMessage msg (RavenousGhoulI attrs) =
+    RavenousGhoulI <$> runMessage msg attrs
 
 instance (EnemyRunner env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of

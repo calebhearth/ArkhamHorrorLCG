@@ -217,6 +217,13 @@ instance HasCount EnemyCount (InvestigatorLocation, [Trait]) Game where
     g
     where locationId = locationFor iid g
 
+instance HasSet RemainingHealth () Game where
+  getSet _ =
+    HashSet.fromList
+      . map (RemainingHealth . remainingHealth)
+      . HashMap.elems
+      . view investigators
+
 instance HasSet LocationId () Game where
   getSet _ = HashMap.keysSet . view locations
 
