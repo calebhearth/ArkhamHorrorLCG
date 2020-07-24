@@ -25,6 +25,7 @@ import Arkham.Types.Prey
 import Arkham.Types.Query
 import Arkham.Types.SkillType
 import Arkham.Types.Source
+import Arkham.Types.Stats
 import Arkham.Types.Token
 import Arkham.Types.Trait
 import Arkham.Types.TreacheryId
@@ -54,6 +55,18 @@ instance HasCardCode Investigator where
 instance HasCardCode Attrs where
   getCardCode = unInvestigatorId . investigatorId
 
+instance HasInvestigatorStats Stats () Investigator where
+  getStats _ i = Stats
+    { health = investigatorHealth - investigatorHealthDamage
+    , sanity = investigatorSanity - investigatorSanityDamage
+    , willpower = skillValueFor SkillWillpower a
+    , intellect = skillValueFor SkillIntellect a
+    , combat = skillValueFor SkillCombat a
+    , agility = skillValueFor SkillAgility a
+    }
+    where a@Attrs {..} = investigatorAttrs i
+
+
 data Attrs = Attrs
   { investigatorName :: Text
   , investigatorId :: InvestigatorId
@@ -80,6 +93,7 @@ data Attrs = Attrs
   , investigatorTraits :: HashSet Trait
   , investigatorTreacheries :: HashSet TreacheryId
   , investigatorModifiers :: [Modifier]
+  , investigatorAbilities :: [(Source, Int)]
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -161,12 +175,20 @@ deck :: Lens' Attrs [PlayerCard]
 deck = lens investigatorDeck $ \m x -> m { investigatorDeck = x }
 
 skillValueFor :: SkillType -> Attrs -> Int
-skillValueFor skill attrs = case skill of
-  SkillWillpower -> investigatorWillpower attrs
-  SkillIntellect -> investigatorIntellect attrs
-  SkillCombat -> investigatorCombat attrs
-  SkillAgility -> investigatorAgility attrs
-  SkillWild -> error "investigators do not have wild skills"
+skillValueFor skill attrs = foldr
+  applyModifier
+  baseSkillValue
+  (investigatorModifiers attrs)
+ where
+  applyModifier (SkillModifier skillType m _) n =
+    if skillType == skill then n + m else n
+  applyModifier _ n = n
+  baseSkillValue = case skill of
+    SkillWillpower -> investigatorWillpower attrs
+    SkillIntellect -> investigatorIntellect attrs
+    SkillCombat -> investigatorCombat attrs
+    SkillAgility -> investigatorAgility attrs
+    SkillWild -> error "investigators do not have wild skills"
 
 drawCard :: [PlayerCard] -> (Maybe PlayerCard, [PlayerCard])
 drawCard [] = (Nothing, [])
@@ -182,8 +204,6 @@ investigatorAttrs :: Investigator -> Attrs
 investigatorAttrs = \case
   RolandBanks attrs -> coerce attrs
   DaisyWalker attrs -> coerce attrs
-
-data Stats = Stats { health :: Int, sanity :: Int, willpower :: Int, intellect :: Int, combat :: Int, agility :: Int }
 
 baseAttrs :: InvestigatorId -> Text -> Stats -> [Trait] -> Attrs
 baseAttrs iid name Stats {..} traits = Attrs
@@ -216,7 +236,8 @@ baseAttrs iid name Stats {..} traits = Attrs
   , investigatorConnectedLocations = mempty
   , investigatorTraits = HashSet.fromList traits
   , investigatorTreacheries = mempty
-  , investigatorModifiers = []
+  , investigatorModifiers = mempty
+  , investigatorAbilities = mempty
   }
 
 newtype RolandBanksI = RolandBanksI Attrs
@@ -309,6 +330,7 @@ type InvestigatorRunner env
     , HasQueue env
     , HasSet AdvanceableActId () env
     , HasSet ConnectedLocationId LocationId env
+    , HasSet BlockedLocationId () env
     )
 
 instance (InvestigatorRunner env) => RunMessage env Investigator where
@@ -324,16 +346,19 @@ sourceIsInvestigator source Attrs {..} = case source of
 
 instance (InvestigatorRunner env) => RunMessage env RolandBanksI where
   runMessage msg rb@(RolandBanksI attrs@Attrs {..}) = case msg of
-    EnemyDefeated _ source | sourceIsInvestigator source attrs ->
+    EnemyDefeated _ _ source | sourceIsInvestigator source attrs ->
       RolandBanksI <$> runMessage msg attrs <* unshiftMessage
-        (Ask $ ChooseTo
-          (ActivateCardAbilityAction investigatorId (getCardCode attrs) 1)
+        (Ask
+        $ ChooseTo
+            (UseCardAbility
+              investigatorId
+              (InvestigatorSource investigatorId)
+              1
+            )
         )
-    ActivateCardAbilityAction _ cardCode n | cardCode == getCardCode attrs ->
-      case n of
-        1 -> rb <$ unshiftMessage
-          (DiscoverClueAtLocation investigatorId investigatorLocation)
-        _ -> pure rb
+    UseCardAbility _ (InvestigatorSource iid) 1 | iid == investigatorId ->
+      rb <$ unshiftMessage
+        (DiscoverClueAtLocation investigatorId investigatorLocation)
     ResolveToken ElderSign iid skillValue | iid == investigatorId -> do
       clueCount <- unClueCount <$> asks (getCount investigatorLocation)
       rb <$ runCheck (skillValue + clueCount)
@@ -360,7 +385,8 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
       a <$ unshiftMessage (EnemyEngageInvestigator eid investigatorId)
     EnemyEngageInvestigator eid iid | iid == investigatorId ->
       pure $ a & engagedEnemies %~ HashSet.insert eid
-    EnemyDefeated eid _ -> pure $ a & engagedEnemies %~ HashSet.delete eid
+    EnemyDefeated eid _ _ -> pure $ a & engagedEnemies %~ HashSet.delete eid
+    RemoveEnemy eid -> pure $ a & engagedEnemies %~ HashSet.delete eid
     ChooseAndDiscardAsset iid | iid == investigatorId -> a <$ unshiftMessage
       (Ask $ ChooseOne $ map
         (ChoiceResult . DiscardAsset)
@@ -377,16 +403,24 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
         & (discard %~ (lookupCard cardCode :))
     ChooseFightEnemyAction iid | iid == investigatorId -> a <$ unshiftMessage
       (Ask $ ChooseOne $ map
-        (\eid -> ChoiceResult
-          (AttackEnemy iid eid SkillCombat (skillValueFor SkillCombat a) 1)
+        (\eid -> ChoiceResults
+          [ WhenAttackEnemy iid eid
+          , AttackEnemy iid eid SkillCombat (skillValueFor SkillCombat a) 1
+          , AfterAttackEnemy iid eid
+          ]
         )
         (HashSet.toList investigatorEngagedEnemies)
       )
-    ChooseMoveAction iid | iid == investigatorId -> a <$ unshiftMessage
-      (Ask $ ChooseOne $ map
-        (\l -> ChoiceResults [CheckAttackOfOpportunity iid, MoveAction iid l])
-        (HashSet.toList investigatorConnectedLocations)
-      )
+    ChooseMoveAction iid | iid == investigatorId -> do
+      blockedLocationIds <- HashSet.map unBlockedLocationId <$> asks (getSet ())
+      let
+        accessibleLocations =
+          investigatorConnectedLocations `difference` blockedLocationIds
+      a <$ unshiftMessage
+        (Ask $ ChooseOne $ map
+          (\l -> ChoiceResults [CheckAttackOfOpportunity iid, MoveAction iid l])
+          (HashSet.toList accessibleLocations)
+        )
     MoveAction iid l | iid == investigatorId -> do
       unshiftMessage (MoveTo iid l)
       pure $ takeAction Action.Move a
@@ -488,6 +522,12 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
           onSuccess
           onFailure
         )
+    ActivateCardAbilityAction iid (InvestigatorSource sourceId) n
+      | sourceId == investigatorId
+      -> let
+           (source, idx) =
+             fromJustNote "no ability" $ investigatorAbilities !!? n
+         in a <$ unshiftMessage (UseCardAbility iid source idx)
     AllDrawCardAndResource -> do
       let
         (mcard, deck') = drawCard investigatorDeck
@@ -500,7 +540,11 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
       let advanceActions = map (ChoiceResult . AdvanceAct) advanceableActIds
       if a ^. remainingActions > 0
         then do
+          blockedLocationIds <- HashSet.map unBlockedLocationId
+            <$> asks (getSet ())
           let
+            accessibleLocations =
+              investigatorConnectedLocations `difference` blockedLocationIds
             playableCards = filter (isPlayable a) investigatorHand
             enemyActions = if HashSet.size investigatorEngagedEnemies == 0
               then []
@@ -512,7 +556,7 @@ instance (InvestigatorRunner env) => RunMessage env Attrs where
                 ]
             moveActions =
               [ ChooseMoveAction
-              | (HashSet.size investigatorConnectedLocations > 0)
+              | (HashSet.size accessibleLocations > 0)
                 && canPerform a Action.Move
               ]
             playActions =

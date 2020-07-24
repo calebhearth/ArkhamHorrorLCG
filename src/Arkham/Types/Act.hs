@@ -11,6 +11,7 @@ import Arkham.Types.ActId
 import Arkham.Types.Classes
 import Arkham.Types.EnemyId
 import Arkham.Types.GameValue
+import Arkham.Types.InvestigatorId
 import Arkham.Types.LocationId
 import Arkham.Types.Message
 import Arkham.Types.Query
@@ -90,7 +91,9 @@ whatHaveYouDone = WhatHaveYouDone . WhatHaveYouDoneI $ baseAttrs
 type ActRunner env
   = ( HasQueue env
     , HasCount ClueCount AllInvestigators env
+    , HasCount ClueCount InvestigatorId env
     , HasSet EnemyId LocationId env
+    , HasSet InvestigatorId LocationId env
     , HasCount PlayerCount () env
     )
 
@@ -128,11 +131,39 @@ instance (ActRunner env) => RunMessage env TrappedI where
     _ -> TrappedI <$> runMessage msg attrs
 
 instance (ActRunner env) => RunMessage env TheBarrierI where
-  runMessage msg (TheBarrierI attrs) = TheBarrierI <$> runMessage msg attrs
+  runMessage msg a@(TheBarrierI attrs@Attrs {..}) = case msg of
+    AdvanceAct aid | aid == actId -> a <$ unshiftMessages
+      [ RevealLocation "01115"
+      , CreateStoryAssetAt "01117" "01115"
+      , CreateEnemyAt "01116" "01112"
+      , NextAct aid "01110"
+      ]
+    EndRoundWindow -> do
+      investigatorIds <- asks (getSet (LocationId "01112"))
+      clueCount <- unClueCount . mconcat <$> traverse
+        (asks . getCount @ClueCount)
+        (HashSet.toList investigatorIds)
+      playerCount <- unPlayerCount <$> asks (getCount ())
+      let requiredClueCount = fromGameValue (PerPlayer 3) playerCount
+      if clueCount >= requiredClueCount
+        then a <$ unshiftMessage
+          (Ask $ ChooseToDoAll
+            [ SpendClues requiredClueCount (HashSet.toList investigatorIds)
+            , AdvanceAct actId
+            ]
+          )
+        else pure a
+
+    _ -> TheBarrierI <$> runMessage msg attrs
 
 instance (ActRunner env) => RunMessage env WhatHaveYouDoneI where
-  runMessage msg (WhatHaveYouDoneI attrs) =
-    WhatHaveYouDoneI <$> runMessage msg attrs
+  runMessage msg a@(WhatHaveYouDoneI attrs@Attrs {..}) = case msg of
+    AdvanceAct aid | aid == actId -> a <$ unshiftMessage
+      (Ask
+      $ ChooseOne [ChoiceResult $ Resolution 1, ChoiceResult $ Resolution 2]
+      )
+    EnemyDefeated _ "01116" _ -> a <$ unshiftMessage (AdvanceAct actId)
+    _ -> WhatHaveYouDoneI <$> runMessage msg attrs
 
 instance (HasQueue env) => RunMessage env Attrs where
   runMessage _msg a@Attrs {..} = pure a

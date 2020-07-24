@@ -14,6 +14,7 @@ import Arkham.Types.Keyword (Keyword)
 import qualified Arkham.Types.Keyword as Keyword
 import Arkham.Types.LocationId
 import Arkham.Types.Message
+import Arkham.Types.Modifier
 import Arkham.Types.Prey
 import Arkham.Types.Query
 import Arkham.Types.SkillType
@@ -62,6 +63,7 @@ data Attrs = Attrs
   , enemyVictory :: Maybe Int
   , enemyKeywords :: HashSet Keyword
   , enemyPrey :: Prey
+  , enemyModifiers :: [Modifier]
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -78,6 +80,9 @@ damage = lens enemyDamage $ \m x -> m { enemyDamage = x }
 
 health :: Lens' Attrs GameValue
 health = lens enemyHealth $ \m x -> m { enemyHealth = x }
+
+modifiers :: Lens' Attrs [Modifier]
+modifiers = lens enemyModifiers $ \m x -> m { enemyModifiers = x }
 
 data Enemy
   = GhoulPriest GhoulPriestI
@@ -121,6 +126,7 @@ baseAttrs eid cardCode =
       , enemyVictory = Nothing
       , enemyKeywords = HashSet.fromList ecKeywords
       , enemyPrey = AnyPrey
+      , enemyModifiers = mempty
       }
 
 newtype GhoulPriestI = GhoulPriestI Attrs
@@ -225,6 +231,15 @@ spawnAt lid eid = do
     then unshiftMessage (EnemySpawn lid eid)
     else unshiftMessage (RemoveEnemy eid)
 
+modifiedDamageAmount :: Attrs -> Int -> Int
+modifiedDamageAmount attrs baseAmount = foldr
+  applyModifier
+  baseAmount
+  (enemyModifiers attrs)
+ where
+  applyModifier (DamageTaken m _) n = n + m
+  applyModifier _ n = n
+
 instance (EnemyRunner env) => RunMessage env GhoulPriestI where
   runMessage msg (GhoulPriestI attrs) = GhoulPriestI <$> runMessage msg attrs
 
@@ -288,10 +303,16 @@ instance (EnemyRunner env) => RunMessage env Attrs where
     EnemyAttack iid eid | eid == enemyId -> a <$ unshiftMessage
       (InvestigatorAssignDamage iid enemyId enemyHealthDamage enemySanityDamage)
     EnemyDamage eid source amount | eid == enemyId -> do
+      let amount' = modifiedDamageAmount a amount
       playerCount <- unPlayerCount <$> asks (getCount ())
-      (a & damage +~ amount) <$ when
-        (a ^. damage + amount >= a ^. health . to (`fromGameValue` playerCount))
-        (unshiftMessage (EnemyDefeated eid source))
+      (a & damage +~ amount') <$ when
+        (a ^. damage + amount' >= a ^. health . to (`fromGameValue` playerCount)
+        )
+        (unshiftMessage (EnemyDefeated eid enemyCardCode source))
+    EnemyAddModifier eid modifier | eid == enemyId ->
+      pure $ a & modifiers %~ (modifier :)
+    EnemyRemoveAllModifiersFromSource eid source | eid == enemyId ->
+      pure $ a & modifiers %~ filter ((source /=) . sourceOfModifier)
     EnemyEngageInvestigator eid iid | eid == enemyId ->
       pure $ a & engagedInvestigators %~ HashSet.insert iid
     CheckAttackOfOpportunity iid | iid `elem` enemyEngagedInvestigators ->

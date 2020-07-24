@@ -2,10 +2,13 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Arkham.Types.Location
   ( lookupLocation
+  , isBlocked
   , Location(..)
   )
 where
 
+import Arkham.Types.AssetId
+import Arkham.Types.Card
 import Arkham.Types.Classes
 import Arkham.Types.EnemyId
 import Arkham.Types.GameValue
@@ -14,7 +17,10 @@ import Arkham.Types.LocationId
 import Arkham.Types.LocationSymbol
 import Arkham.Types.Message
 import Arkham.Types.Query
+import Arkham.Types.SkillType
 import Arkham.Types.Source
+import Arkham.Types.Stats (Stats)
+import qualified Arkham.Types.Stats as Stats
 import Arkham.Types.Trait
 import Arkham.Types.TreacheryId
 import ClassyPrelude
@@ -29,6 +35,9 @@ lookupLocation :: LocationId -> Location
 lookupLocation lid =
   fromJustNote ("Unkown location: " <> show lid)
     $ HashMap.lookup lid allLocations
+
+isBlocked :: Location -> Bool
+isBlocked = locationBlocked . locationAttrs
 
 allLocations :: HashMap LocationId Location
 allLocations = HashMap.fromList $ map
@@ -51,6 +60,7 @@ data Attrs = Attrs
   , locationConnectedLocations :: HashSet LocationId
   , locationTraits             :: HashSet Trait
   , locationTreacheries :: HashSet TreacheryId
+  , locationAssets :: HashSet AssetId
   }
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
@@ -75,9 +85,15 @@ investigators =
 treacheries :: Lens' Attrs (HashSet TreacheryId)
 treacheries = lens locationTreacheries $ \m x -> m { locationTreacheries = x }
 
+assets :: Lens' Attrs (HashSet AssetId)
+assets = lens locationAssets $ \m x -> m { locationAssets = x }
+
 connectedLocations :: Lens' Attrs (HashSet LocationId)
 connectedLocations =
   lens locationConnectedLocations $ \m x -> m { locationConnectedLocations = x }
+
+blocked :: Lens' Attrs Bool
+blocked = lens locationBlocked $ \m x -> m { locationBlocked = x }
 
 baseAttrs
   :: LocationId
@@ -103,6 +119,7 @@ baseAttrs lid name shroud' revealClues symbol' connectedSymbols' = Attrs
   , locationConnectedLocations = mempty
   , locationTraits = mempty
   , locationTreacheries = mempty
+  , locationAssets = mempty
   }
 
 clues :: Lens' Attrs Int
@@ -179,7 +196,13 @@ parlor =
     { locationBlocked = True
     }
 
-type LocationRunner env = (HasCount PlayerCount () env, HasQueue env)
+type LocationRunner env
+  = ( HasCount PlayerCount () env
+    , HasQueue env
+    , HasId StoryAssetId CardCode env
+    , HasInvestigatorStats Stats InvestigatorId env
+    , HasId (Maybe OwnerId) AssetId env
+    )
 
 instance (LocationRunner env) => RunMessage env Location where
   runMessage msg = \case
@@ -210,7 +233,37 @@ instance (LocationRunner env) => RunMessage env CellarI where
     _ -> CellarI <$> runMessage msg attrs
 
 instance (LocationRunner env) => RunMessage env ParlorI where
-  runMessage msg (ParlorI attrs) = ParlorI <$> runMessage msg attrs
+  runMessage msg l@(ParlorI attrs@Attrs {..}) = case msg of
+    RevealLocation lid | lid == locationId -> do
+      attrs' <- runMessage msg attrs
+      pure $ ParlorI $ attrs' & blocked .~ False
+    PrePlayerWindow | locationRevealed -> do
+      aid <- unStoryAssetId <$> asks (getId (CardCode "01117"))
+      miid <- fmap unOwnerId <$> asks (getId aid)
+      case miid of
+        Just _ ->
+          l <$ unshiftMessage (RemoveAbilitiesFrom (LocationSource locationId))
+        Nothing -> l <$ unshiftMessages
+          [ RemoveAbilitiesFrom (LocationSource locationId)
+          , AddAbility (AssetSource aid) (LocationSource locationId, 2)
+          ]
+    UseCardAbility iid (LocationSource lid) 1
+      | lid == locationId && locationRevealed -> l
+      <$ unshiftMessage (Resign iid)
+    UseCardAbility iid (LocationSource lid) 2
+      | lid == locationId && locationRevealed -> do
+        aid <- unStoryAssetId <$> asks (getId (CardCode "01117"))
+        skillValue <- Stats.intellect <$> asks (getStats iid)
+        l <$ unshiftMessage
+          (BeginSkillCheck
+            iid
+            SkillIntellect
+            4
+            skillValue
+            [TakeControlOfAsset iid aid]
+            []
+          )
+    _ -> ParlorI <$> runMessage msg attrs
 
 instance (LocationRunner env) => RunMessage env Attrs where
   runMessage msg a@Attrs {..} = case msg of
@@ -224,11 +277,12 @@ instance (LocationRunner env) => RunMessage env Attrs where
           [SuccessfulInvestigation lid, DiscoverClueAtLocation iid lid]
           []
         )
-    PlacedLocation lid | lid == locationId -> if locationBlocked
-      then pure a
-      else a <$ unshiftMessage (AddConnection lid locationSymbol)
+    PlacedLocation lid | lid == locationId ->
+      a <$ unshiftMessage (AddConnection lid locationSymbol)
     AttachTreacheryToLocation tid lid | lid == locationId ->
       pure $ a & treacheries %~ HashSet.insert tid
+    AddAssetAt aid lid | lid == locationId ->
+      pure $ a & assets %~ HashSet.insert aid
     LocationIncreaseShroud lid n | lid == locationId -> pure $ a & shroud +~ n
     LocationDecreaseShroud lid n | lid == locationId -> pure $ a & shroud -~ n
     AddConnection lid symbol' | symbol' `elem` locationConnectedSymbols -> do
@@ -251,7 +305,8 @@ instance (LocationRunner env) => RunMessage env Attrs where
       pure $ a & investigators %~ HashSet.insert iid
     EnemySpawn lid eid | lid == locationId ->
       pure $ a & enemies %~ HashSet.insert eid
-    EnemyDefeated eid _ -> pure $ a & enemies %~ HashSet.delete eid
+    RemoveEnemy eid -> pure $ a & enemies %~ HashSet.delete eid
+    EnemyDefeated eid _ _ -> pure $ a & enemies %~ HashSet.delete eid
     RevealLocation lid | lid == locationId -> do
       clueCount <- fromGameValue locationRevealClues . unPlayerCount <$> asks
         (getCount ())

@@ -1,4 +1,7 @@
-module Arkham.Types.Source where
+module Arkham.Types.Source
+  ( Source(..)
+  )
+where
 
 import Arkham.Types.AgendaId
 import Arkham.Types.AssetId

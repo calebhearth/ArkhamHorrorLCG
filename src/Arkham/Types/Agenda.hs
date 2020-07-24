@@ -6,11 +6,13 @@ module Arkham.Types.Agenda
 where
 
 import Arkham.Types.AgendaId
+import Arkham.Types.Card
 import Arkham.Types.Classes
 import Arkham.Types.GameValue
 import Arkham.Types.Message
 import Arkham.Types.Query
 import Arkham.Types.Source
+import Arkham.Types.Trait
 import ClassyPrelude
 import Data.Aeson
 import Data.Coerce
@@ -118,8 +120,21 @@ instance (AgendaRunner env) => RunMessage env WhatsGoingOnI where
     _ -> WhatsGoingOnI <$> runMessage msg attrs
 
 instance (AgendaRunner env) => RunMessage env RiseOfTheGhoulsI where
-  runMessage msg (RiseOfTheGhoulsI attrs) =
-    RiseOfTheGhoulsI <$> runMessage msg attrs
+  runMessage msg a@(RiseOfTheGhoulsI attrs@Attrs {..}) = case msg of
+    AdvanceAgenda aid | aid == agendaId -> a <$ unshiftMessages
+      [ ShuffleEncounterDiscardBackIn
+      , DiscardEncounterUntilFirst (AgendaSource aid) (EnemyType, Ghoul)
+      ]
+    RequestedEncounterCard (AgendaSource aid) mcard | aid == agendaId ->
+      case mcard of
+        Nothing -> a <$ unshiftMessage (NextAgenda aid "01107")
+        Just card -> do
+          leadInvestigatorId <- unLeadInvestigatorId <$> asks (getId ())
+          a <$ unshiftMessages
+            [ InvestigatorDrewEncounterCard leadInvestigatorId card
+            , NextAgenda aid "01107"
+            ]
+    _ -> RiseOfTheGhoulsI <$> runMessage msg attrs
 
 instance (AgendaRunner env) => RunMessage env TheyreGettingOutI where
   runMessage msg (TheyreGettingOutI attrs) =

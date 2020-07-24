@@ -11,6 +11,7 @@ module Arkham.Types.Card
   , allCards
   , allPlayerCards
   , allEncounterCards
+  , encounterCardMatch
   )
 where
 
@@ -42,7 +43,7 @@ data EncounterCardType
   = TreacheryType
   | EnemyType
   | LocationType
-  deriving stock (Show, Generic)
+  deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
 data ClassSymbol
@@ -101,6 +102,10 @@ data EncounterCard = MkEncounterCard
 instance HasCardCode EncounterCard where
   getCardCode = ecCardCode
 
+encounterCardMatch :: (EncounterCardType, Trait) -> EncounterCard -> Bool
+encounterCardMatch (cardType, trait) MkEncounterCard {..} =
+  ecCardType == cardType && trait `elem` ecTraits
+
 allCards :: HashMap CardCode Card
 allCards =
   HashMap.map PlayerCard allPlayerCards
@@ -139,6 +144,16 @@ allPlayerCards = HashMap.fromList $ map
     , pcSkills = []
     , pcTraits = [Supply]
     }
+  , MkPlayerCard
+    { pcCardCode = "01117"
+    , pcName = "Lita Chantler"
+    , pcCost = 0
+    , pcLevel = 0
+    , pcCardType = AssetType
+    , pcClassSybol = Neutral
+    , pcSkills = []
+    , pcTraits = [Ally]
+    }
   ]
 
 allEncounterCards :: HashMap CardCode EncounterCard
@@ -150,6 +165,20 @@ allEncounterCards = HashMap.fromList $ map
     , ecCardType = EnemyType
     , ecTraits = [Humanoid, Monster, Ghoul, Elite]
     , ecKeywords = [Keyword.Hunter, Keyword.Retaliate]
+    }
+  , MkEncounterCard
+    { ecCardCode = "01118"
+    , ecName = "Flesh-Eater"
+    , ecCardType = EnemyType
+    , ecTraits = [Humanoid, Monster, Ghoul]
+    , ecKeywords = []
+    }
+  , MkEncounterCard
+    { ecCardCode = "01119"
+    , ecName = "Icy Ghoul"
+    , ecCardType = EnemyType
+    , ecTraits = [Humanoid, Monster, Ghoul]
+    , ecKeywords = []
     }
   , MkEncounterCard
     { ecCardCode = "01159"

@@ -10,5 +10,8 @@ newtype LocationId = LocationId { unLocationId :: CardCode }
 newtype ConnectedLocationId = ConnectedLocationId { unConnectedLocationId :: LocationId }
   deriving newtype (Show, Eq, ToJSON, FromJSON, ToJSONKey, FromJSONKey, Hashable)
 
+newtype BlockedLocationId = BlockedLocationId { unBlockedLocationId :: LocationId }
+  deriving newtype (Show, Eq, ToJSON, FromJSON, ToJSONKey, FromJSONKey, Hashable)
+
 newtype ClosestLocationId = ClosestLocationId { unClosestLocationId :: LocationId }
   deriving newtype (Show, Eq, ToJSON, FromJSON, ToJSONKey, FromJSONKey, Hashable)

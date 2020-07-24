@@ -10,6 +10,8 @@ import Arkham.Types.AgendaId
 import Arkham.Types.Card
 import Arkham.Types.Classes
 import Arkham.Types.Difficulty
+import Arkham.Types.EncounterSet (gatherEncounterSet)
+import qualified Arkham.Types.EncounterSet as EncounterSet
 import Arkham.Types.Message
 import Arkham.Types.Query
 import Arkham.Types.ScenarioId
@@ -18,6 +20,7 @@ import qualified Arkham.Types.Token as Token
 import Arkham.Types.Trait
 import ClassyPrelude
 import Data.Aeson
+import System.Random.Shuffle
 -- import           Data.Coerce
 import qualified Data.HashMap.Strict as HashMap
 import Safe (fromJustNote)
@@ -91,10 +94,16 @@ instance (ScenarioRunner env) => RunMessage env Scenario where
 instance (ScenarioRunner env) => RunMessage env TheGatheringI where
   runMessage msg s@(TheGatheringI attrs@Attrs {..}) = case msg of
     Setup -> do
+      encounterDeck <- liftIO $ shuffleM $ foldMap
+        gatherEncounterSet
+        [ EncounterSet.TheGathering
+        , EncounterSet.Rats
+        , EncounterSet.Ghouls
+        , EncounterSet.StrikingFear
+        , EncounterSet.ChillingCold
+        ]
       pushMessages
-        [ SetEncounterDeck $ map
-          (fromJustNote "missing card" . flip HashMap.lookup allEncounterCards)
-          ["01165", "01163"]
+        [ SetEncounterDeck encounterDeck
         , AddAgenda "01105"
         , AddAct "01108"
         , PlaceLocation "01111"
@@ -110,7 +119,7 @@ instance (ScenarioRunner env) => RunMessage env TheGatheringI where
           s <$ runCheck (skillValue - ghoulCount)
         else do
           unshiftMessage
-            (AddOnFailure $ FindAndDrawEncounterCard iid (EnemyType, [Ghoul]))
+            (AddOnFailure $ FindAndDrawEncounterCard iid (EnemyType, Ghoul))
           s <$ runCheck (skillValue - 2)
     ResolveToken Token.Cultist iid skillValue ->
       if scenarioDifficulty `elem` [Easy, Standard]

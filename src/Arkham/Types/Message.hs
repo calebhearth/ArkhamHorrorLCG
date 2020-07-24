@@ -1,6 +1,7 @@
 module Arkham.Types.Message
   ( Message(..)
   , Question(..)
+  , EncounterCardSource(..)
   )
 where
 
@@ -20,6 +21,10 @@ import Arkham.Types.Trait
 import Arkham.Types.TreacheryId
 import ClassyPrelude
 import Data.Aeson
+
+data EncounterCardSource = FromDiscard | FromEncounterDeck
+  deriving stock (Show, Generic)
+  deriving anyclass (ToJSON, FromJSON)
 
 data Message
   = Setup
@@ -56,13 +61,15 @@ data Message
   | MoveAction InvestigatorId LocationId
   | MoveTo InvestigatorId LocationId
   | PrePlayerWindow
+  | PostPlayerWindow
   | PlayerWindow InvestigatorId
   | Ask Question
   | ChooseTakeResourceAction InvestigatorId
   | ChooseDrawCardAction InvestigatorId
   | ChoosePlayCardAction InvestigatorId
   | ChooseActivateCardAbilityAction InvestigatorId
-  | ActivateCardAbilityAction InvestigatorId CardCode Int
+  | ActivateCardAbilityAction InvestigatorId Source Int
+  | UseCardAbility InvestigatorId Source Int
   | ResolveToken Token InvestigatorId Int
   | ChooseMoveAction InvestigatorId
   | ChooseInvestigateAction InvestigatorId
@@ -77,11 +84,12 @@ data Message
   | EnemyAttacks [Message]
   | EnemyAttack InvestigatorId EnemyId
   | InvestigatorDrawEncounterCard InvestigatorId
+  | InvestigatorDrewEncounterCard InvestigatorId EncounterCard
   | InvestigatorDrawEnemy InvestigatorId LocationId EnemyId
   | EnemySpawn LocationId EnemyId
   | EnemyEngageInvestigator EnemyId InvestigatorId
   | EnemyDamage EnemyId Source Int
-  | EnemyDefeated EnemyId Source
+  | EnemyDefeated EnemyId CardCode Source
   | InvestigatorPlayCard InvestigatorId CardCode Int
   | InvestigatorAssignDamage InvestigatorId EnemyId Int Int
   | AssetDamage AssetId EnemyId Int Int
@@ -98,7 +106,8 @@ data Message
   | AddOnFailure Message
   | FailSkillCheck
   | FindAndDrawEncounterCard InvestigatorId
-                         (EncounterCardType, [Trait])
+                         (EncounterCardType, Trait)
+  | FoundAndDrewEncounterCard InvestigatorId EncounterCardSource (Int, EncounterCard)
   | DrawAnotherToken InvestigatorId Int Token
   | SkillTestEnds
   | ReturnTokens [Token]
@@ -123,14 +132,29 @@ data Message
   | SetEncounterDeck [EncounterCard]
   | TreacheryFailure InvestigatorId TreacheryId -- TODO: better name
   | ChooseAndDiscardAsset InvestigatorId
+  | WhenAttackEnemy InvestigatorId EnemyId
   | AttackEnemy InvestigatorId EnemyId SkillType Int Int
+  | AfterAttackEnemy InvestigatorId EnemyId
   | SuccessfulInvestigation LocationId
   | AttachTreacheryToLocation TreacheryId LocationId
   | LocationIncreaseShroud LocationId Int
   | LocationDecreaseShroud LocationId Int
   | AttachTreacheryToInvestigator TreacheryId InvestigatorId
   | InvestigatorAddModifier InvestigatorId Modifier
+  | EnemyAddModifier EnemyId Modifier
   | InvestigatorRemoveAllModifiersFromSource InvestigatorId Source
+  | EnemyRemoveAllModifiersFromSource EnemyId Source
+  | RequestedEncounterCard Source (Maybe EncounterCard)
+  | ShuffleEncounterDiscardBackIn
+  | DiscardEncounterUntilFirst Source (EncounterCardType, Trait)
+  | SpendClues Int [InvestigatorId]
+  | CreateStoryAssetAt CardCode LocationId
+  | AddAssetAt AssetId LocationId
+  | Resolution Int
+  | Resign InvestigatorId
+  | AddAbility Source (Source, Int)
+  | RemoveAbilitiesFrom Source
+  | TakeControlOfAsset InvestigatorId AssetId
   deriving stock (Show, Generic)
   deriving anyclass (ToJSON, FromJSON)
 
@@ -140,5 +164,6 @@ data Question
   | ChoiceResult Message
   | ChoiceResults [Message]
   | ChooseTo Message
+  | ChooseToDoAll [Message]
   deriving stock (Show, Generic)
   deriving anyclass (FromJSON, ToJSON)

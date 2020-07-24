@@ -8,6 +8,7 @@ import Arkham.Types.Query
 import Arkham.Types.SkillType
 import Arkham.Types.Trait
 import ClassyPrelude
+import GHC.Stack
 import Lens.Micro
 import Lens.Micro.Extras
 
@@ -57,13 +58,16 @@ class HasSet c b a where
   getSet :: b -> a -> HashSet c
 
 class HasId c b a where
-  getId :: b -> a -> c
+  getId :: HasCallStack => b -> a -> c
 
 class HasLocation a where
   locationOf :: a -> LocationId
 
 class HasCount c b a where
   getCount :: b -> a -> c
+
+class HasInvestigatorStats c b a where
+  getStats :: b -> a -> c
 
 class HasClueCount a where
   getClueCount :: a -> ClueCount

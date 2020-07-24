@@ -37,6 +37,7 @@ import Arkham.Types.Scenario
 import Arkham.Types.ScenarioId
 import Arkham.Types.SkillCheck
 import Arkham.Types.SkillType
+import Arkham.Types.Stats
 import Arkham.Types.Token (Token)
 import qualified Arkham.Types.Token as Token
 import Arkham.Types.Trait
@@ -54,6 +55,7 @@ import Lens.Micro.Platform ()
 import Safe (fromJustNote)
 import System.Environment
 import System.Random
+import System.Random.Shuffle
 import Text.Pretty.Simple
 import Text.Read hiding (get)
 
@@ -183,6 +185,19 @@ newGame scenarioId investigatorsList = do
 instance HasId LeadInvestigatorId () Game where
   getId _ = LeadInvestigatorId . view leadInvestigatorId
 
+instance HasId (Maybe OwnerId) AssetId Game where
+  getId aid g = getId () asset
+    where asset = fromJustNote "Asset not in game" $ g ^? assets . ix aid
+
+instance HasId StoryAssetId CardCode Game where
+  getId cardCode =
+    StoryAssetId
+      . fst
+      . fromJustNote "Asset not in game"
+      . find ((cardCode ==) . getCardCode . snd)
+      . HashMap.toList
+      . view assets
+
 instance HasId LocationId InvestigatorId Game where
   getId = locationFor
 
@@ -219,6 +234,9 @@ instance HasCount EnemyCount (InvestigatorLocation, [Trait]) Game where
     g
     where locationId = locationFor iid g
 
+instance HasInvestigatorStats Stats InvestigatorId Game where
+  getStats iid g = getStats () (g ^?! investigators . ix iid)
+
 instance HasSet RemainingHealth () Game where
   getSet _ =
     HashSet.fromList
@@ -228,6 +246,13 @@ instance HasSet RemainingHealth () Game where
 
 instance HasSet LocationId () Game where
   getSet _ = HashMap.keysSet . view locations
+
+instance HasSet BlockedLocationId () Game where
+  getSet _ =
+    HashSet.map BlockedLocationId
+      . HashMap.keysSet
+      . HashMap.filter isBlocked
+      . view locations
 
 data BFSState = BFSState
   { _bfsSearchQueue       :: Seq LocationId
@@ -321,6 +346,13 @@ instance HasSet EnemyId LocationId Game where
   getSet lid g = getSet () location
     where location = fromJustNote "No location" $ g ^? locations . ix lid
 
+instance HasSet InvestigatorId () Game where
+  getSet _ = HashMap.keysSet . view investigators
+
+instance HasSet InvestigatorId LocationId Game where
+  getSet lid g = getSet () location
+    where location = fromJustNote "No location" $ g ^? locations . ix lid
+
 instance HasQueue Game where
   messageQueue = lens giMessages $ \m x -> m { giMessages = x }
 
@@ -328,6 +360,11 @@ createEnemy :: MonadIO m => CardCode -> m (EnemyId, Enemy)
 createEnemy cardCode = do
   eid <- liftIO $ EnemyId <$> nextRandom
   pure (eid, lookupEnemy cardCode eid)
+
+createAsset :: MonadIO m => CardCode -> m (AssetId, Asset)
+createAsset cardCode = do
+  aid <- liftIO $ AssetId <$> nextRandom
+  pure (aid, lookupAsset cardCode aid)
 
 createTreachery :: MonadIO m => CardCode -> m (TreacheryId, Treachery)
 createTreachery cardCode = do
@@ -353,6 +390,7 @@ runGameMessage msg g = case msg of
     unshiftMessage (PlacedLocation lid)
     pure $ g & locations . at lid ?~ lookupLocation lid
   SetEncounterDeck encounterDeck' -> pure $ g & encounterDeck .~ encounterDeck'
+  RemoveEnemy eid -> pure $ g & enemies %~ HashMap.delete eid
   RemoveLocation lid -> pure $ g & locations %~ HashMap.delete lid
   NextAgenda aid1 aid2 ->
     pure $ g & agendas %~ HashMap.delete aid1 & agendas %~ HashMap.insert
@@ -427,7 +465,7 @@ runGameMessage msg g = case msg of
     let asset = g ^?! assets . ix aid
     unshiftMessage (AssetDiscarded aid (getCardCode asset))
     pure $ g & assets %~ HashMap.delete aid
-  EnemyDefeated eid _ ->
+  EnemyDefeated eid _ _ ->
     let
       enemy = g ^?! enemies . ix eid
       encounterCard = fromJustNote "missing"
@@ -491,29 +529,70 @@ runGameMessage msg g = case msg of
   ResolveToken Token.MinusSeven _ skillValue -> g <$ runCheck (skillValue - 7)
   ResolveToken Token.MinusEight _ skillValue -> g <$ runCheck (skillValue - 8)
   ResolveToken Token.AutoFail _ _ -> g <$ unshiftMessage FailSkillCheck
+  CreateStoryAssetAt cardCode lid -> do
+    (assetId', asset') <- createAsset cardCode
+    unshiftMessage (AddAssetAt assetId' lid)
+    pure $ g & assets . at assetId' ?~ asset'
   CreateEnemyAt cardCode lid -> do
     (enemyId', enemy') <- createEnemy cardCode
     unshiftMessage (EnemySpawn lid enemyId')
     pure $ g & enemies . at enemyId' ?~ enemy'
+  FindAndDrawEncounterCard iid matcher -> do
+    let
+      matchingDiscards =
+        filter (encounterCardMatch matcher . snd) (zip [1 ..] (g ^. discard))
+    let
+      matchingDeckCards = filter
+        (encounterCardMatch matcher . snd)
+        (zip [1 ..] (g ^. encounterDeck))
+    g <$ unshiftMessage
+      (Ask
+      $ ChooseOne
+      $ map
+          (ChoiceResult . FoundAndDrewEncounterCard iid FromDiscard)
+          matchingDiscards
+      <> map
+           (ChoiceResult . FoundAndDrewEncounterCard iid FromEncounterDeck)
+           matchingDeckCards
+      )
+  FoundAndDrewEncounterCard iid cardSource (n, card) -> do
+    let
+      discard' = case cardSource of
+        FromDiscard -> without n (g ^. discard)
+        _ -> g ^. discard
+      encounterDeck' = case cardSource of
+        FromEncounterDeck -> without n (g ^. encounterDeck)
+        _ -> g ^. encounterDeck
+    shuffled <- liftIO $ shuffleM encounterDeck'
+    unshiftMessage (InvestigatorDrewEncounterCard iid card)
+    pure $ g & encounterDeck .~ shuffled & discard .~ discard'
+  DiscardEncounterUntilFirst source matcher -> do
+    let
+      (discards, remainingDeck) =
+        break (encounterCardMatch matcher) (g ^. encounterDeck)
+    case remainingDeck of
+      [] -> do
+        unshiftMessage (RequestedEncounterCard source Nothing)
+        encounterDeck' <- liftIO $ shuffleM (discards <> g ^. discard)
+        pure $ g & encounterDeck .~ encounterDeck' & discard .~ mempty
+      (x : xs) -> do
+        unshiftMessage (RequestedEncounterCard source (Just x))
+        pure $ g & encounterDeck .~ xs & discard %~ (reverse discards <>)
   InvestigatorDrawEncounterCard iid -> do
     let (card : encounterDeck') = g ^. encounterDeck
-    case ecCardType card of
-      EnemyType -> do
-        (enemyId', enemy') <- createEnemy (ecCardCode card)
-        let lid = locationFor iid g
-        unshiftMessage (InvestigatorDrawEnemy iid lid enemyId')
-        pure
-          $ g
-          & (enemies . at enemyId' ?~ enemy')
-          & (encounterDeck .~ encounterDeck')
-      TreacheryType -> do
-        (treacheryId', treachery') <- createTreachery (ecCardCode card)
-        unshiftMessage (RunTreachery iid treacheryId')
-        pure
-          $ g
-          & (treacheries . at treacheryId' ?~ treachery')
-          & (encounterDeck .~ encounterDeck')
-      LocationType -> pure g
+    unshiftMessage (InvestigatorDrewEncounterCard iid card)
+    pure $ g & encounterDeck .~ encounterDeck'
+  InvestigatorDrewEncounterCard iid card -> case ecCardType card of
+    EnemyType -> do
+      (enemyId', enemy') <- createEnemy (ecCardCode card)
+      let lid = locationFor iid g
+      unshiftMessage (InvestigatorDrawEnemy iid lid enemyId')
+      pure $ g & (enemies . at enemyId' ?~ enemy')
+    TreacheryType -> do
+      (treacheryId', treachery') <- createTreachery (ecCardCode card)
+      unshiftMessage (RunTreachery iid treacheryId')
+      pure $ g & (treacheries . at treacheryId' ?~ treachery')
+    LocationType -> pure g
   DiscardTreachery tid ->
     let
       treachery = fromJustNote "missing treachery" $ g ^? treacheries . ix tid
@@ -593,7 +672,10 @@ runMessages g = flip runReaderT g $ do
         then pushMessage EndInvestigation >> runMessages g
         else
           pushMessages
-              [PrePlayerWindow, PlayerWindow $ g ^. activeInvestigatorId]
+              [ PrePlayerWindow
+              , PlayerWindow $ g ^. activeInvestigatorId
+              , PostPlayerWindow
+              ]
             >> runMessages g
     Just msg -> case msg of
       Ask q -> (Just q, ) <$> toExternalGame g
@@ -616,6 +698,11 @@ handleQuestion :: MonadIO m => GameJson -> Question -> m [Message]
 handleQuestion _ = \case
   ChoiceResult msg -> pure [msg]
   ChoiceResults msgs -> pure msgs
+  q@(ChooseToDoAll msgs) -> do
+    putStr $ pack $ show q
+    liftIO $ hFlush stdout
+    resp <- getLine
+    if "n" `isPrefixOf` toLower resp then pure [] else pure msgs
   q@(ChooseTo msg) -> do
     putStr $ pack $ show q
     liftIO $ hFlush stdout
