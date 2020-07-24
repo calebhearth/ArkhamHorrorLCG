@@ -10,6 +10,7 @@ module Arkham.Types.Card
   , HasCost(..)
   , allCards
   , allPlayerCards
+  , lookupPlayerCard
   , allEncounterCards
   , encounterCardMatch
   )
@@ -22,6 +23,7 @@ import Arkham.Types.Trait
 import ClassyPrelude
 import Data.Aeson
 import qualified Data.HashMap.Strict as HashMap
+import Safe (fromJustNote)
 
 class HasCardCode a where
   getCardCode :: a -> CardCode
@@ -88,6 +90,10 @@ instance HasCardCode PlayerCard where
 
 instance HasCost PlayerCard where
   getCost = pcCost
+
+lookupPlayerCard :: CardCode -> PlayerCard
+lookupPlayerCard cardCode =
+  fromJustNote "Unknown card" $ HashMap.lookup cardCode allPlayerCards
 
 data EncounterCard = MkEncounterCard
   { ecCardCode :: CardCode

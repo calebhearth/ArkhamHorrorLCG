@@ -9,6 +9,7 @@ import Arkham.Types.AssetId
 import Arkham.Types.Card
 import Arkham.Types.Enemy
 import Arkham.Types.EnemyId
+import Arkham.Types.Helpers
 import Arkham.Types.Investigator
 import Arkham.Types.InvestigatorId
 import Arkham.Types.Location
@@ -34,10 +35,10 @@ data GameJson = GameJson
   , gActiveInvestigatorId :: InvestigatorId
   , gLeadInvestigatorId :: InvestigatorId
   , gPhase :: Phase
-  , gEncounterDeck :: [EncounterCard]
+  , gEncounterDeck :: Deck EncounterCard
   , gDiscard :: [EncounterCard]
   , gSkillCheck :: Maybe SkillCheck
-  , gChaosBag :: [Token]
+  , gChaosBag :: Bag Token
   , gAgendas :: HashMap AgendaId Agenda
   , gTreacheries :: HashMap TreacheryId Treachery
   , gActs :: HashMap ActId Act

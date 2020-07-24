@@ -1,6 +1,7 @@
 module Arkham.Types.Helpers where
 
 import ClassyPrelude
+import Data.Aeson
 import qualified Data.HashMap.Strict as HashMap
 
 without :: Int -> [a] -> [a]
@@ -21,3 +22,19 @@ infix 9 !!?
 fromSet :: (Eq key) => HashSet key -> HashMap key value -> [value]
 fromSet hset =
   HashMap.foldrWithKey (\k v vs -> if k `elem` hset then v : vs else vs) []
+
+drawCard :: [a] -> (Maybe a, [a])
+drawCard [] = (Nothing, [])
+drawCard (x : xs) = (Just x, xs)
+
+newtype Deck a = Deck { unDeck :: [a] }
+  deriving newtype (Semigroup, Monoid, ToJSON, FromJSON)
+
+instance Show (Deck a) where
+  show _ = "<Deck>"
+
+newtype Bag a = Bag { unBag :: [a] }
+  deriving newtype (Semigroup, Monoid, ToJSON, FromJSON)
+
+instance Show (Bag a) where
+  show _ = "<Bag>"

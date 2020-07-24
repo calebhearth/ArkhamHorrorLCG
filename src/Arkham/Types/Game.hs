@@ -45,6 +45,7 @@ import Arkham.Types.Treachery
 import Arkham.Types.TreacheryId
 import ClassyPrelude
 import Control.Monad.State
+import Data.Coerce
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import qualified Data.Sequence as Seq
@@ -70,9 +71,9 @@ data Game = Game
   , giActiveInvestigatorId :: InvestigatorId
   , giLeadInvestigatorId :: InvestigatorId
   , giPhase :: Phase
-  , giEncounterDeck :: [EncounterCard]
+  , giEncounterDeck :: Deck EncounterCard
   , giDiscard :: [EncounterCard]
-  , giChaosBag :: [Token]
+  , giChaosBag :: Bag Token
   , giSkillCheck :: Maybe SkillCheck
   , giActs :: HashMap ActId Act
   , giAgendas :: HashMap AgendaId Agenda
@@ -104,13 +105,14 @@ assets :: Lens' Game (HashMap AssetId Asset)
 assets = lens giAssets $ \m x -> m { giAssets = x }
 
 encounterDeck :: Lens' Game [EncounterCard]
-encounterDeck = lens giEncounterDeck $ \m x -> m { giEncounterDeck = x }
+encounterDeck =
+  lens (coerce . giEncounterDeck) $ \m x -> m { giEncounterDeck = coerce x }
 
 discard :: Lens' Game [EncounterCard]
 discard = lens giDiscard $ \m x -> m { giDiscard = x }
 
 chaosBag :: Lens' Game [Token]
-chaosBag = lens giChaosBag $ \m x -> m { giChaosBag = x }
+chaosBag = lens (coerce . giChaosBag) $ \m x -> m { giChaosBag = coerce x }
 
 leadInvestigatorId :: Lens' Game InvestigatorId
 leadInvestigatorId =
@@ -157,7 +159,7 @@ newGame scenarioId investigatorsList = do
     , giAgendas = mempty
     , giTreacheries = mempty
     , giActs = mempty
-    , giChaosBag =
+    , giChaosBag = Bag
       [ Token.PlusOne
       , Token.PlusOne
       , Token.Zero
@@ -379,9 +381,10 @@ locationFor iid g = locationOf investigator
 
 drawToken :: MonadIO m => Game -> m (Token, [Token])
 drawToken Game {..} = do
-  n <- liftIO $ randomRIO (0, length giChaosBag - 1)
-  let token = fromJustNote "impossivle" $ giChaosBag !!? n
-  pure (token, without n giChaosBag)
+  let tokens = coerce giChaosBag
+  n <- liftIO $ randomRIO (0, length tokens - 1)
+  let token = fromJustNote "impossible" $ tokens !!? n
+  pure (token, without n tokens)
 
 runGameMessage
   :: (HasQueue env, MonadReader env m, MonadIO m) => Message -> Game -> m Game

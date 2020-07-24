@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f8b320022260fd4b0055c7268bc2a0693e71afee30d0e99ba11327579d21b412
+-- hash: 5a09b47c60eecdb8b7c573abebe2b6f119e6d32b0bad3c56bacdb9fd9b15cef4
 
 name:           Arkham
 version:        0.1.0.0
@@ -46,6 +46,12 @@ library
       Arkham.Types.GameValue
       Arkham.Types.Helpers
       Arkham.Types.Investigator
+      Arkham.Types.Investigator.Attrs
+      Arkham.Types.Investigator.Cards.AgnesBaker
+      Arkham.Types.Investigator.Cards.DaisyWalker
+      Arkham.Types.Investigator.Cards.RolandBanks
+      Arkham.Types.Investigator.Cards.SkidsOToole
+      Arkham.Types.Investigator.Runner
       Arkham.Types.InvestigatorId
       Arkham.Types.Keyword
       Arkham.Types.Location
