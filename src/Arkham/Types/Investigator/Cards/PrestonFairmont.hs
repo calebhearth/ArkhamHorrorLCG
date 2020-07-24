@@ -26,7 +26,7 @@ prestonFairmont = PrestonFairmontI $ baseAttrs
     , combat = 1
     , agility = 1
     }
-  [Silver Twilight, Socialite]
+  [SilverTwilight, Socialite]
 
 instance (InvestigatorRunner env) => RunMessage env PrestonFairmontI where
   runMessage msg i@(PrestonFairmontI attrs@Attrs {..}) = case msg of

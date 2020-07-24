@@ -26,7 +26,7 @@ amandaSharpe = AmandaSharpeI $ baseAttrs
     , combat = 2
     , agility = 2
     }
-  [Miskatonic, Schola]
+  [Miskatonic, Scholar]
 
 instance (InvestigatorRunner env) => RunMessage env AmandaSharpeI where
   runMessage msg i@(AmandaSharpeI attrs@Attrs {..}) = case msg of

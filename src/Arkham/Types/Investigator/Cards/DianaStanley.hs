@@ -26,7 +26,7 @@ dianaStanley = DianaStanleyI $ baseAttrs
     , combat = 3
     , agility = 3
     }
-  [Cultist, Silver Twilight]
+  [Cultist, SilverTwilight]
 
 instance (InvestigatorRunner env) => RunMessage env DianaStanleyI where
   runMessage msg i@(DianaStanleyI attrs@Attrs {..}) = case msg of

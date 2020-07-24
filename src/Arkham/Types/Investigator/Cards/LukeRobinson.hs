@@ -26,7 +26,7 @@ lukeRobinson = LukeRobinsonI $ baseAttrs
     , combat = 2
     , agility = 3
     }
-  [Dreamer, Drifter. Wayfarer]
+  [Dreamer, Drifter, Wayfarer]
 
 instance (InvestigatorRunner env) => RunMessage env LukeRobinsonI where
   runMessage msg i@(LukeRobinsonI attrs@Attrs {..}) = case msg of
